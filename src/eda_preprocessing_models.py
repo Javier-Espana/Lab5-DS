@@ -46,7 +46,7 @@ def clean_text(text):
     text = re.sub(r'&[a-z]+;', ' ', text)
     # 4. Eliminacion de menciones (@usuario)
     text = re.sub(r'@\w+', '', text)
-    # 5. Tratamiento de hashtags (#terremoto -> terremoto)
+    # 5. Tratamiento de hashtags (#tag -> tag)
     text = re.sub(r'#(\w+)', r'\1', text)
     # 6. Preservacion de codigo 911 y eliminacion de otros digitos
     text = re.sub(r'\b911\b', ' emergency911 ', text)
@@ -209,9 +209,104 @@ def run_part2_preprocessing_and_ngrams(train_df):
     plt.savefig('docs/figures/top_bigrams.png', dpi=300)
     plt.close()
     
-    print("Figuras de Parte 2 generadas con exito.")
     return train_df
+
+def run_part3_models(train_df):
+    print("=== EJECUTANDO PARTE 3: MODELOS PRELIMINARES DE CLASIFICACION ===")
+    
+    # Division estratificada
+    X = train_df['cleaned_text']
+    y = train_df['target']
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+    
+    # Vectorizacion TF-IDF
+    tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=10000, sublinear_tf=True)
+    X_train_vec = tfidf.fit_transform(X_train)
+    X_val_vec = tfidf.transform(X_val)
+    
+    models = {
+        'Multinomial Naive Bayes': MultinomialNB(alpha=1.0),
+        'Complement Naive Bayes': ComplementNB(alpha=1.0),
+        'Logistic Regression': LogisticRegression(C=1.0, max_iter=1000, random_state=42),
+        'Linear SVM (SGD)': SGDClassifier(loss='log_loss', penalty='l2', random_state=42)
+    }
+    
+    results = []
+    trained_models = {}
+    
+    for name, model in models.items():
+        model.fit(X_train_vec, y_train)
+        y_pred = model.predict(X_val_vec)
+        y_proba = model.predict_proba(X_val_vec)[:, 1] if hasattr(model, 'predict_proba') else None
+        
+        acc = accuracy_score(y_val, y_pred)
+        p, r, f1, _ = precision_recall_fscore_support(y_val, y_pred, average='binary')
+        roc = roc_auc_score(y_val, y_proba) if y_proba is not None else 0.0
+        
+        results.append({
+            'Modelo': name,
+            'Accuracy': acc,
+            'Precision': p,
+            'Recall': r,
+            'F1-Score': f1,
+            'ROC-AUC': roc
+        })
+        trained_models[name] = (model, y_pred, y_proba)
+        
+    res_df = pd.DataFrame(results)
+    print("\nResultados Comparativos de Modelos:")
+    print(res_df.to_string(index=False))
+    
+    # Guardar metricas en CSV
+    res_df.to_csv('docs/figures/preliminary_metrics.csv', index=False)
+    
+    # 1. Barplot comparativo de metricas
+    res_melted = pd.melt(res_df, id_vars=['Modelo'], var_name='Metrica', value_name='Valor')
+    plt.figure(figsize=(10, 5))
+    sns.barplot(x='Modelo', y='Valor', hue='Metrica', data=res_melted, palette='tab10')
+    plt.title('Comparacion de Metricas de Rendimiento - Modelos Preliminares')
+    plt.ylim(0.5, 1.0)
+    plt.ylabel('Puntaje')
+    plt.xlabel('Modelo')
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig('docs/figures/models_comparison_metrics.png', dpi=300)
+    plt.close()
+    
+    # 2. Matrices de confusion
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+    axes = axes.flatten()
+    for idx, (name, (model, y_pred, y_proba)) in enumerate(trained_models.items()):
+        cm = confusion_matrix(y_val, y_pred)
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx], cbar=False,
+                    xticklabels=['No Desastre', 'Desastre'], yticklabels=['No Desastre', 'Desastre'])
+        axes[idx].set_title(name)
+        axes[idx].set_xlabel('Predicho')
+        axes[idx].set_ylabel('Real')
+    plt.tight_layout()
+    plt.savefig('docs/figures/confusion_matrices_preliminary.png', dpi=300)
+    plt.close()
+    
+    # 3. Curvas ROC
+    plt.figure(figsize=(8, 6))
+    for name, (model, y_pred, y_proba) in trained_models.items():
+        if y_proba is not None:
+            fpr, tpr, _ = roc_curve(y_val, y_proba)
+            roc = roc_auc_score(y_val, y_proba)
+            plt.plot(fpr, tpr, label=f'{name} (AUC = {roc:.4f})')
+    plt.plot([0, 1], [0, 1], 'k--', label='Clasificador Aleatorio (AUC = 0.5000)')
+    plt.xlabel('Tasa de Falsos Positivos (FPR)')
+    plt.ylabel('Tasa de Verdaderos Positivos (TPR)')
+    plt.title('Curvas ROC - Modelos Preliminares de Clasificacion')
+    plt.legend(loc='lower right')
+    plt.tight_layout()
+    plt.savefig('docs/figures/roc_curves_preliminary.png', dpi=300)
+    plt.close()
+    
+    print("Figuras de Parte 3 generadas con exito.")
+    return res_df
 
 if __name__ == '__main__':
     train_df, test_df = run_part1_eda()
     train_df = run_part2_preprocessing_and_ngrams(train_df)
+    res_df = run_part3_models(train_df)

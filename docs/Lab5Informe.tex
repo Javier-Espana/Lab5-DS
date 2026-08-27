@@ -37,7 +37,7 @@
 \maketitle
 
 \begin{abstract}
-En el presente informe de avance se documentan los resultados del procesamiento de lenguaje natural y minería de texto sobre el conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se detallan las dimensiones y características estructurales del dataset, el análisis exploratorio de datos (EDA), el comportamiento de atributos como palabras clave y ubicaciones, y la distribución de longitudes de texto. Asimismo, se expone de forma minuciosa la metodología de preprocesamiento, el tratamiento diferenciado de entidades, la generación de n-gramas (unigramas, bigramas y trigramas), la visualización de frecuencias léxicas mediante nubes de palabras e histogramas, y el análisis de la necesidad de contexto.
+En el presente informe de avance se documentan los resultados del procesamiento de lenguaje natural y minería de texto sobre el conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se detallan las dimensiones y características estructurales del dataset, el análisis exploratorio de datos (EDA), el comportamiento de atributos como palabras clave y ubicaciones, y la distribución de longitudes de texto. Asimismo, se expone de forma minuciosa la metodología de preprocesamiento, el tratamiento diferenciado de entidades, la generación de n-gramas (unigramas, bigramas y trigramas), la visualización de frecuencias léxicas mediante nubes de palabras e histogramas, y el análisis de la necesidad de contexto. Finalmente, se diseñan, entrenan y evalúan cuatro arquitecturas preliminares de clasificación (\textit{Multinomial Naive Bayes}, \textit{Complement Naive Bayes}, \textit{Logistic Regression} y \textit{Linear SVM}) sobre representaciones TF-IDF que incorporan unigramas y bigramas, discutiendo su desempeño y estableciendo la base para la entrega final.
 \end{abstract}
 
 \section{Introducción}
@@ -185,5 +185,95 @@ El análisis comparativo de n-gramas revela elementos críticos para el modelado
     \item \textbf{Ambigüedad y polisemia en unigramas:} Ciertas palabras como \textit{fire}, \textit{body}, \textit{building}, \textit{bomb} y \textit{kill} aparecen con alta frecuencia en ambas clases. Por ejemplo, \textit{"fire"} aparece 267 veces en desastres y 88 veces en no desastres (usado como jerga juvenil: \textit{"this mixtape is fire"}).
     \item \textbf{El rol esencial de los Bigramas y Trigramas:} Al incorporar bigramas, la ambigüedad se disipa drásticamente. Mientras que en desastres observamos colocaciones unívocas como \textit{suicide bomber}, \textit{california wildfire}, \textit{severe thunderstorm} y \textit{oil spill}, en la categoría no desastre encontramos combinaciones como \textit{cross body}, \textit{body bag} (asociado a carteras/moda), \textit{liked video} y \textit{reddit quarantine}. Esto demuestra concluyentemente que los modelos de clasificación deben alimentarse con representaciones que capturen n-gramas ($n \ge 2$) o ponderaciones TF-IDF que integren el contexto inmediato.
 \end{itemize}
+
+\section{Modelos Preliminares de Clasificación}
+Para la entrega parcial se implementó y evaluó una suite de modelos de clasificación baseline sobre el corpus preprocesado.
+
+\subsection{Estrategia de Vectorización y Abordaje del Contexto}
+Para capturar la información sintáctica y el contexto local de las palabras, se utilizó la técnica de ponderación \textbf{TF-IDF} (\textit{Term Frequency - Inverse Document Frequency}) configurada con:
+\begin{itemize}
+    \item Rango de n-gramas: $(1, 2)$, integrando tanto unigramas como bigramas.
+    \item Escalamiento logarítmico sublineal: \texttt{sublinear\_tf = True}, que calcula $1 + \log(TF)$, amortiguando el impacto de palabras repetidas múltiples veces en un mismo tweet.
+    \item Tamaño máximo de vocabulario: $10,000$ características principales seleccionadas por frecuencia inversa de documento.
+\end{itemize}
+
+\subsection{Algoritmos Evaluados}
+Se evaluaron cuatro algoritmos fundamentales con división estratificada de datos ($80\%$ para entrenamiento y $20\%$ para validación, preservando la proporción original de clases):
+\begin{enumerate}
+    \item \textbf{Multinomial Naive Bayes (\texttt{MultinomialNB}):} Modelo probabilístico basado en el teorema de Bayes con supuesto de independencia condicional.
+    \item \textbf{Complement Naive Bayes (\texttt{ComplementNB}):} Modificación adaptada para mitigar el sesgo hacia la clase mayoritaria.
+    \item \textbf{Regresión Logística (\texttt{LogisticRegression}):} Modelo lineal con regularización $L_2$ ($C=1.0$), optimizado para estimar probabilidades calibradas.
+    \item \textbf{Linear SVM (\texttt{SGDClassifier}):} Clasificador de margen lineal entrenado mediante descenso de gradiente estocástico con función de pérdida logística.
+\end{enumerate}
+
+\section{Resultados y Evaluación Comparativa}
+
+\subsection{Métricas de Rendimiento}
+La Tabla~\ref{tab:model_metrics} resume las métricas cuantitativas obtenidas por cada modelo sobre el conjunto de validación independiente (1,523 tweets).
+
+\begin{table}[H]
+\centering
+\caption{Métricas de rendimiento de los modelos preliminares de clasificación.}
+\label{tab:model_metrics}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Modelo} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{ROC-AUC} \\
+\midrule
+Multinomial Naive Bayes & 0.8201 & \textbf{0.8785} & 0.6743 & 0.7630 & 0.8731 \\
+Complement Naive Bayes  & 0.8142 & 0.8193 & 0.7278 & 0.7709 & 0.8731 \\
+Regresión Logística     & \textbf{0.8214} & 0.8435 & 0.7171 & 0.7752 & \textbf{0.8753} \\
+Linear SVM (SGD)        & 0.8201 & 0.8253 & \textbf{0.7370} & \textbf{0.7787} & 0.8747 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/models_comparison_metrics.png}
+    \caption{Comparación de métricas de rendimiento en validación para los modelos preliminares.}
+    \label{fig:models_metrics}
+\end{figure}
+
+\subsection{Matrices de Confusión y Curvas ROC}
+En la Figura~\ref{fig:cm_preliminary} se detallan las matrices de confusión de los cuatro modelos, y en la Figura~\ref{fig:roc_preliminary} se exhiben las curvas ROC correspondientes.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\textwidth]{figures/confusion_matrices_preliminary.png}
+    \caption{Matrices de confusión de los modelos preliminares en el conjunto de validación.}
+    \label{fig:cm_preliminary}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/roc_curves_preliminary.png}
+    \caption{Curvas ROC y valor de área bajo la curva (AUC) para los modelos preliminares.}
+    \label{fig:roc_preliminary}
+\end{figure}
+
+\subsection{Discusión de Resultados Preliminares}
+\begin{itemize}
+    \item \textbf{Regresión Logística:} Demuestra el desempeño global más equilibrado, alcanzando la mayor exactitud ($82.14\%$) y el mayor ROC-AUC ($0.8753$), con una alta precisión ($84.35\%$).
+    \item \textbf{Multinomial Naive Bayes:} Presenta la precisión más elevada ($87.85\%$), lo que implica una tasa mínima de falsos positivos (únicamente 61 tweets no desastre clasificados erróneamente como desastre). No obstante, su recall ($67.43\%$) deja escapar un tercio de las alertas reales.
+    \item \textbf{Linear SVM (SGD):} Obtiene el mayor F1-Score ($0.7787$) y la mejor sensibilidad/recall ($73.70\%$), resultando idóneo si la prioridad operativa consiste en no omitir desastres reales.
+\end{itemize}
+
+\section{Conclusiones de la Entrega Parcial y Trabajo Futuro}
+\begin{enumerate}
+    \item El análisis exploratorio inicial permitió identificar la estructura del dataset, confirmando que no existen valores faltantes en la variable objetivo ni en el texto principal, y revelando diferencias estadísticas en la longitud de caracteres y vocabulario clave entre desastres reales y metáforas.
+    \item El pipeline de preprocesamiento logró normalizar de forma limpia el texto de redes sociales, eliminando URLs, menciones y puntuación, mientras que la regla ad-hoc para preservar el código de emergencia \texttt{911} protegió un token crítico para la predicción.
+    \item El estudio de n-gramas evidenció que los unigramas por sí solos presentan ambigüedad severa ante términos polisémicos (\textit{fire}, \textit{body}, \textit{building}), mientras que los bigramas proporcionan el contexto discriminativo indispensable.
+    \item Los modelos preliminares basados en TF-IDF lograron superar el $82\%$ de exactitud y $0.875$ de ROC-AUC en validación estratificada, estableciendo una línea base sólida.
+    \item \textbf{Pasos para la entrega final:} Incorporación de análisis de polaridad y sentimiento (TextBlob / VADER / SentiWordNet), ingeniería de características contextuales (variable de negatividad, longitudes, palabras en mayúsculas), ajuste de hiperparámetros (\textit{GridSearchCV}), evaluación de modelos avanzados y desarrollo de la función interactiva de clasificación de tweets para usuarios finales.
+\end{enumerate}
+
+\section*{Referencias}
+\begin{enumerate}
+    \item Jurafsky, D., \& Martin, J. H. (2008). \textit{Speech and Language Processing}. Stanford University.
+    \item Jurafsky, D., \& Martin, J. H. (2014). \textit{N-Grams}. Speech and Language Processing, pp. 2--7.
+    \item Feinerer, I., Hornik, K., \& Meyer, D. (2008). \textit{Text Mining Infrastructure in R}. Journal of Statistical Software, 25(5), 1–54.
+    \item Bird, S., Klein, E., \& Loper, E. (2009). \textit{Natural Language Processing with Python}. O'Reilly Media.
+    \item Kaggle. (2020). \textit{Natural Language Processing with Disaster Tweets}. Kaggle Competition Dataset.
+\end{enumerate}
 
 \end{document}

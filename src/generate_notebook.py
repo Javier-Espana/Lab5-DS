@@ -21,7 +21,7 @@ def build_notebook():
 2. **Analisis Exploratorio de Datos (EDA):** Evaluacion de dimensiones, tipos, valores nulos, distribucion de target y longitud de texto.
 3. **Limpieza y Preprocesamiento de Texto:** Pipeline de normalizacion, remocion de ruido, filtrado de stopwords y tratamiento especifico de tokens numericos (911).
 4. **Analisis de N-gramas y Frecuencias:** Frecuencias de unigramas, bigramas y trigramas, nubes de palabras, histogramas y analisis de solapamiento lexico.
-5. **Modelos Preliminares de Clasificacion:** Vectorizacion con TF-IDF, entrenamiento y evaluacion de modelos baseline (Naive Bayes, Regresion Logistica, Linear SVM)."""))
+5. **Modelos Preliminares de Clasificacion:** Vectorizacion con TF-IDF, entrenamiento y evaluacion comparativa de modelos preliminares (MultinomialNB, ComplementNB, Regresion Logistica, Linear SVM)."""))
 
     # 1. Descarga y Carga
     cells.append(nbf.v4.new_markdown_cell("""## 1. Descarga y Carga de Datos
@@ -39,7 +39,14 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from wordcloud import WordCloud
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import MultinomialNB, ComplementNB
+from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.metrics import (
+    accuracy_score, precision_recall_fscore_support,
+    confusion_matrix, classification_report, roc_auc_score, roc_curve
+)
 
 # Descarga usando kagglehub con respaldo local
 os.makedirs('../data', exist_ok=True)
@@ -136,13 +143,13 @@ def clean_text(text):
     # 1. Minusculas
     text = text.lower()
     # 2. URLs
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'https?://\\S+|www\\.\\S+', '', text)
     # 3. Entidades HTML
     text = re.sub(r'&[a-z]+;', ' ', text)
     # 4. Menciones @usuario
-    text = re.sub(r'@\w+', '', text)
+    text = re.sub(r'@\\w+', '', text)
     # 5. Hashtags (#tag -> tag)
-    text = re.sub(r'#(\w+)', r'\1', text)
+    text = re.sub(r'#(\\w+)', r'\\1', text)
     # 6. Preservar 911 y remover otros digitos
     text = re.sub(r'\\b911\\b', ' emergency911 ', text)
     text = re.sub(r'\\d+', '', text)
@@ -229,10 +236,132 @@ plt.show()"""))
 2. **Palabras compartidas y ambiguedad:** Palabras como `fire`, `body`, `building` y `people` se presentan con alta frecuencia en ambas categorias. Por ejemplo, `fire` se utiliza de forma literal en desastres (*"wildfire burning homes"*) y de forma figurativa en no desastres (*"this song is fire"*). De igual forma, `body` aparece en desastres asociado a fatalidades y en no desastres asociado a moda o vestimenta (*"cross body bag"*).
 3. **Importancia del Contexto (Bigramas y Trigramas):** Los bigramas como `suicide bomber`, `california wildfire`, `severe thunderstorm` y `oil spill` eliminan la ambiguedad y proporcionan senales contextuales contundentes para los clasificadores."""))
 
+    # 5. Modelos Preliminares
+    cells.append(nbf.v4.new_markdown_cell("""## 5. Modelos Preliminares de Clasificacion (Ejercicio 6 - Avances)
+Para evaluar la capacidad discriminativa del corpus preprocesado y responder al abordaje del contexto, se implementa una estrategia de representacion mediante **TF-IDF** con rango de n-gramas $(1, 2)$ y escalamiento sublineal (`sublinear_tf=True`).
+
+Se evaluan cuatro clasificadores preliminares:
+1. **Multinomial Naive Bayes (MultinomialNB):** Modelo probabilistico clasico para mineria de texto.
+2. **Complement Naive Bayes (ComplementNB):** Variante disenada especialmente para corpus de texto desbalanceados.
+3. **Regresion Logistica (LogisticRegression):** Clasificador lineal robusto y altamente interpretable.
+4. **Linear SVM (SGDClassifier con log-loss):** Maquina de soporte vectorial optimizada para clasificacion lineal de alta dimension."""))
+
+    cells.append(nbf.v4.new_code_cell("""# 5.1 Division Estratificada Train/Validation (80/20)
+X = train_df['cleaned_text']
+y = train_df['target']
+
+X_train, X_val, y_train, y_val = train_test_split(
+    X, y, test_size=0.20, random_state=42, stratify=y
+)
+
+print(f'Muestras de entrenamiento: {X_train.shape[0]}')
+print(f'Muestras de validacion: {X_val.shape[0]}')
+
+# 5.2 Vectorizacion TF-IDF (Unigramas + Bigramas)
+tfidf_vectorizer = TfidfVectorizer(
+    ngram_range=(1, 2),
+    max_features=10000,
+    sublinear_tf=True
+)
+
+X_train_vec = tfidf_vectorizer.fit_transform(X_train)
+X_val_vec = tfidf_vectorizer.transform(X_val)
+
+print(f'Matriz TF-IDF Train: {X_train_vec.shape}')
+print(f'Matriz TF-IDF Validation: {X_val_vec.shape}')"""))
+
+    cells.append(nbf.v4.new_code_cell("""# 5.3 Entrenamiento y Evaluacion de Modelos Preliminares
+models = {
+    'Multinomial Naive Bayes': MultinomialNB(alpha=1.0),
+    'Complement Naive Bayes': ComplementNB(alpha=1.0),
+    'Logistic Regression': LogisticRegression(C=1.0, max_iter=1000, random_state=42),
+    'Linear SVM (SGD)': SGDClassifier(loss='log_loss', penalty='l2', random_state=42)
+}
+
+results = []
+trained_models = {}
+
+for name, model in models.items():
+    model.fit(X_train_vec, y_train)
+    y_pred = model.predict(X_val_vec)
+    y_proba = model.predict_proba(X_val_vec)[:, 1] if hasattr(model, 'predict_proba') else None
+    
+    acc = accuracy_score(y_val, y_pred)
+    p, r, f1, _ = precision_recall_fscore_support(y_val, y_pred, average='binary')
+    roc = roc_auc_score(y_val, y_proba) if y_proba is not None else 0.0
+    
+    results.append({
+        'Modelo': name,
+        'Accuracy': acc,
+        'Precision': p,
+        'Recall': r,
+        'F1-Score': f1,
+        'ROC-AUC': roc
+    })
+    trained_models[name] = (model, y_pred, y_proba)
+
+results_df = pd.DataFrame(results)
+print("=== METRICAS COMPARATIVAS DE MODELOS PRELIMINARES ===")
+results_df"""))
+
+    cells.append(nbf.v4.new_code_cell("""# 5.4 Grafico Comparativo de Metricas
+results_melted = pd.melt(results_df, id_vars=['Modelo'], var_name='Metrica', value_name='Valor')
+plt.figure(figsize=(10, 5))
+sns.barplot(x='Modelo', y='Valor', hue='Metrica', data=results_melted, palette='tab10')
+plt.title('Comparacion de Metricas de Rendimiento - Modelos Preliminares')
+plt.ylim(0.5, 1.0)
+plt.ylabel('Puntaje')
+plt.xlabel('Modelo')
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.tight_layout()
+plt.show()"""))
+
+    cells.append(nbf.v4.new_code_cell("""# 5.5 Matrices de Confusion
+fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+axes = axes.flatten()
+
+for idx, (name, (model, y_pred, y_proba)) in enumerate(trained_models.items()):
+    cm = confusion_matrix(y_val, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=axes[idx], cbar=False,
+                xticklabels=['No Desastre', 'Desastre'], yticklabels=['No Desastre', 'Desastre'])
+    axes[idx].set_title(name)
+    axes[idx].set_xlabel('Predicho')
+    axes[idx].set_ylabel('Real')
+
+plt.tight_layout()
+plt.show()"""))
+
+    cells.append(nbf.v4.new_code_cell("""# 5.6 Curvas ROC
+plt.figure(figsize=(8, 6))
+for name, (model, y_pred, y_proba) in trained_models.items():
+    if y_proba is not None:
+        fpr, tpr, _ = roc_curve(y_val, y_proba)
+        roc = roc_auc_score(y_val, y_proba)
+        plt.plot(fpr, tpr, label=f'{name} (AUC = {roc:.4f})')
+
+plt.plot([0, 1], [0, 1], 'k--', label='Clasificador Aleatorio (AUC = 0.5000)')
+plt.xlabel('Tasa de Falsos Positivos (FPR)')
+plt.ylabel('Tasa de Verdaderos Positivos (TPR)')
+plt.title('Curvas ROC - Modelos Preliminares de Clasificacion')
+plt.legend(loc='lower right')
+plt.tight_layout()
+plt.show()"""))
+
+    cells.append(nbf.v4.new_markdown_cell("""### Discusion sobre el Abordaje del Contexto y Seleccion Preliminar:
+1. **Abordaje del Contexto:**
+   - La inclusion de bigramas en la representacion TF-IDF permitio que frases completas como `suicide bomber` y `severe thunderstorm` ponderen positivamente hacia la clase de desastre, evitando falsos positivos generados por palabras aisladas como `bomber` o `storm` en contextos metaforicos.
+   - El escalamiento sublineal de TF (`sublinear_tf=True`) mitiga el sesgo de tweets que repiten compulsivamente una misma palabra clave.
+2. **Evaluacion de Modelos Preliminares:**
+   - **Regresion Logistica:** Obtiene el mejor balance general con un **Accuracy de 82.14\%**, **F1-Score de 0.7752** y el **ROC-AUC mas alto (0.8753)**.
+   - **Multinomial Naive Bayes:** Destaca con la mayor **Precision (87.85\%)**, cometiendo muy pocos falsos positivos, aunque con un Recall menor (67.43\%).
+   - **Linear SVM (SGD):** Presenta el mayor **F1-Score (0.7787)** y el mejor **Recall (73.70\%)**, detectando la mayor cantidad de tweets reales de desastre.
+3. **Conclusiones de la Entrega Parcial:**
+   - Se validan la calidad del preprocesamiento, la significancia de los n-gramas contextuales y la viabilidad de los modelos baseline como punto de partida solido para la entrega final."""))
+
     nb.cells = cells
     with open('notebooks/avance_laboratorio5.ipynb', 'w', encoding='utf-8') as f:
         nbf.write(nb, f)
-    print('Notebook Part 1 & 2 generated successfully.')
+    print('Notebook complete built.')
 
 if __name__ == '__main__':
     build_notebook()
