@@ -37,7 +37,7 @@
 \maketitle
 
 \begin{abstract}
-En el presente informe de avance se documentan los resultados iniciales del procesamiento de lenguaje natural y minería de texto sobre el conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se detallan las dimensiones y características estructurales del dataset, el análisis exploratorio de datos (EDA), el comportamiento de atributos como palabras clave y ubicaciones, y la distribución de longitudes de texto. Adicionalmente, se describe la metodología de preprocesamiento, extracción de n-gramas y el diseño de la arquitectura preliminar de clasificación.
+En el presente informe de avance se documentan los resultados del procesamiento de lenguaje natural y minería de texto sobre el conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se detallan las dimensiones y características estructurales del dataset, el análisis exploratorio de datos (EDA), el comportamiento de atributos como palabras clave y ubicaciones, y la distribución de longitudes de texto. Asimismo, se expone de forma minuciosa la metodología de preprocesamiento, el tratamiento diferenciado de entidades, la generación de n-gramas (unigramas, bigramas y trigramas), la visualización de frecuencias léxicas mediante nubes de palabras e histogramas, y el análisis de la necesidad de contexto.
 \end{abstract}
 
 \section{Introducción}
@@ -100,5 +100,90 @@ Asimismo, en la Figura~\ref{fig:text_length} se observa que los tweets de desast
     \caption{Distribución de la cantidad de caracteres y palabras por tweet según categoría.}
     \label{fig:text_length}
 \end{figure}
+
+\section{Limpieza y Preprocesamiento de los Datos}
+El lenguaje utilizado en Twitter se caracteriza por ruido sintáctico, presencia de hipervínculos, menciones de usuarios, abreviaciones y caracteres tipográficos no estándar. Para acondicionar el corpus textual se diseñó e implementó un pipeline secuencial de normalización mediante las librerías \texttt{re}, \texttt{string} y \texttt{NLTK} (\textit{Natural Language Toolkit}):
+
+\begin{enumerate}
+    \item \textbf{Conversión a minúsculas:} Homogeneización del espacio léxico para evitar duplicación de términos por distinción de mayúsculas.
+    \item \textbf{Eliminación de hipervínculos (URLs) y entidades HTML:} Expresiones regulares para remover enlaces (\texttt{https?://\textbackslash S+|www\textbackslash .\textbackslash S+}) y secuencias escapadas (\texttt{\&amp;}, \texttt{\&lt;}, \texttt{\&gt;}).
+    \item \textbf{Manejo de menciones (@) y hashtags (\#):} Las menciones de usuario (\texttt{@usuario}) se eliminan ya que corresponden a nombres propios específicos sin carga semántica generalizable. Por el contrario, los hashtags se descomponen para conservar el término interior (ejemplo: \texttt{\#earthquake} $\rightarrow$ \texttt{earthquake}), dado que frecuentemente sintetizan el evento.
+    \item \textbf{Tratamiento diferenciado de números y código 911:} La mayoría de los números enteros corresponden a horas, coordenadas o cantidades irrelevantes. No obstante, el número \textbf{911} posee un significado crítico en situaciones de auxilio. Por ende, se implementó una regla que preserva explícitamente \texttt{911} (transformándolo en el token sintáctico \texttt{emergency911}) antes de suprimir el resto de los dígitos.
+    \item \textbf{Supresión de signos de puntuación y emoticones:} Se eliminan caracteres de puntuación y se remueven símbolos no ASCII / emoticones que no aportan a la semántica formal de clasificación.
+    \item \textbf{Filtrado de palabras vacías (\textit{Stopwords}):} Se empleó el corpus de \textit{stopwords} en inglés de NLTK, complementado con términos comunes de ruido en Twitter (\textit{u}, \textit{im}, \textit{amp}, \textit{via}, \textit{dont}, \textit{cant}).
+    \item \textbf{Lematización:} Reducción morfológica mediante \texttt{WordNetLemmatizer}, llevando las palabras a su raíz léxica (por ejemplo, \textit{buildings} $\rightarrow$ \textit{building}, \textit{fires} $\rightarrow$ \textit{fire}).
+\end{enumerate}
+
+\begin{table}[H]
+\centering
+\small
+\caption{Ejemplos de transformación mediante el pipeline de preprocesamiento.}
+\label{tab:preprocessing_examples}
+\begin{tabular}{p{7.5cm}p{7.5cm}c}
+\toprule
+\textbf{Texto Original (Raw)} & \textbf{Texto Preprocesado (Cleaned)} & \textbf{Target} \\
+\midrule
+Our Deeds are the Reason of this \#earthquake May ALLAH Forgive us all & deed reason earthquake may allah forgive & 1 \\
+Forest fire near La Ronge Sask. Canada & forest fire near ronge sask canada & 1 \\
+What a nice day to relax with a good book & nice day relax good book & 0 \\
+Crying out: 911 emergency near downtown! & cry emergency911 emergency near downtown & 1 \\
+Love this cross body bag so much! & love cross body bag much & 0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Generación de N-gramas y Análisis de Frecuencias}
+
+\subsection{Visualización mediante Nubes de Palabras (Word Clouds)}
+Para visualizar la prominencia relativa de los términos en cada subconjunto, se generaron nubes de palabras utilizando la librería \texttt{wordcloud}, como se presenta en la Figura~\ref{fig:wordclouds}.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/wordcloud_disaster.png}
+        \caption{Tweets de Desastres Reales ($target = 1$).}
+        \label{fig:wc_disaster}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/wordcloud_nondisaster.png}
+        \caption{Tweets No Desastres ($target = 0$).}
+        \label{fig:wc_nondisaster}
+    \end{subfigure}
+    \caption{Nubes de palabras para ambas categorías.}
+    \label{fig:wordclouds}
+\end{figure}
+
+\subsection{Unigramas y Bigramas más Frecuentes}
+En la Figura~\ref{fig:ngrams_comparison} se observan los unigramas y bigramas dominantes en cada categoría.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/top_unigrams.png}
+        \caption{Top 15 Unigramas.}
+        \label{fig:top_unigrams}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/top_bigrams.png}
+        \caption{Top 15 Bigramas.}
+        \label{fig:top_bigrams}
+    \end{subfigure}
+    \caption{Comparación de Unigramas y Bigramas más frecuentes por clase.}
+    \label{fig:ngrams_comparison}
+\end{figure}
+
+\subsection{Discusión sobre Vocabulario Compartido y la Necesidad de Contexto}
+El análisis comparativo de n-gramas revela elementos críticos para el modelado:
+\begin{itemize}
+    \item \textbf{Términos predictivos de desastre:} Unigramas como \textit{fire}, \textit{california}, \textit{suicide}, \textit{disaster}, \textit{police}, \textit{kill}, \textit{storm} y \textit{flood} presentan una concentración preponderante en la clase de desastre real.
+    \item \textbf{Ambigüedad y polisemia en unigramas:} Ciertas palabras como \textit{fire}, \textit{body}, \textit{building}, \textit{bomb} y \textit{kill} aparecen con alta frecuencia en ambas clases. Por ejemplo, \textit{"fire"} aparece 267 veces en desastres y 88 veces en no desastres (usado como jerga juvenil: \textit{"this mixtape is fire"}).
+    \item \textbf{El rol esencial de los Bigramas y Trigramas:} Al incorporar bigramas, la ambigüedad se disipa drásticamente. Mientras que en desastres observamos colocaciones unívocas como \textit{suicide bomber}, \textit{california wildfire}, \textit{severe thunderstorm} y \textit{oil spill}, en la categoría no desastre encontramos combinaciones como \textit{cross body}, \textit{body bag} (asociado a carteras/moda), \textit{liked video} y \textit{reddit quarantine}. Esto demuestra concluyentemente que los modelos de clasificación deben alimentarse con representaciones que capturen n-gramas ($n \ge 2$) o ponderaciones TF-IDF que integren el contexto inmediato.
+\end{itemize}
 
 \end{document}
