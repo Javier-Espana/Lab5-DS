@@ -9,7 +9,7 @@ Semestre II - 2026
 ## Integrantes del Grupo
 - Javier Eduardo Espana (23204)
 - Angel Esteban Esquit (23249)
-- Bryan Gabriel Aguilar (23354)
+- Roberto José Barreda (23354)
 
 ---
 
