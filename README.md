@@ -7,8 +7,8 @@ CC3084 - Data Science
 Semestre II - 2026  
 
 ## Integrantes del Grupo
-- Javier Eduardo Espana (23204)
-- Angel Esteban Esquit (23249)
+- Javier Eduardo Espana (23361)
+- Angel Esteban Esquit (23221)
 - Roberto José Barreda (23354)
 
 ---
