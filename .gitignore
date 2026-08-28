@@ -21,3 +21,6 @@ ENV/
 *.out
 *.synctex.gz
 *.toc
+
+# Datos derivados generados por el pipeline
+data/train_processed.csv

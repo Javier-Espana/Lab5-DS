@@ -1,0 +1,91 @@
+tipo,clase,ngram,count,probability
+unigrama,Desastre real,fire,267,0.009287925696594427
+unigrama,Desastre real,news,141,0.004904859637527394
+unigrama,Desastre real,disaster,122,0.004243921104810937
+unigrama,Desastre real,california,115,0.004000417434862768
+unigrama,Desastre real,year,112,0.003896058719170696
+unigrama,Desastre real,suicide,112,0.003896058719170696
+unigrama,Desastre real,police,109,0.003791700003478624
+unigrama,Desastre real,people,106,0.0036873412877865518
+unigrama,Desastre real,home,105,0.0036525550492225276
+unigrama,Desastre real,family,105,0.0036525550492225276
+unigrama,Desastre real,train,100,0.003478623856402407
+unigrama,Desastre real,killed,95,0.003304692663582287
+unigrama,Desastre real,storm,95,0.003304692663582287
+unigrama,Desastre real,building,94,0.0032699064250182627
+unigrama,Desastre real,hiroshima,93,0.0032351201864542385
+unigrama,No desastre,new,170,0.005074475388794364
+unigrama,No desastre,body,119,0.003552132772156055
+unigrama,No desastre,time,106,0.003164084654189427
+unigrama,No desastre,day,103,0.003074535088504821
+unigrama,No desastre,video,102,0.0030446852332766186
+unigrama,No desastre,love,96,0.002865586101907406
+unigrama,No desastre,people,94,0.0028058863914510014
+unigrama,No desastre,know,91,0.002716336825766395
+unigrama,No desastre,fire,88,0.002626787260081789
+unigrama,No desastre,let,87,0.0025969374048535865
+unigrama,No desastre,back,86,0.0025670875496253843
+unigrama,No desastre,got,85,0.002537237694397182
+unigrama,No desastre,see,84,0.00250738783916898
+unigrama,No desastre,full,84,0.00250738783916898
+unigrama,No desastre,emergency,83,0.002477537983940778
+bigrama,Desastre real,suicide bomber,60,0.002354972917811445
+bigrama,Desastre real,northern california,41,0.001609231493837821
+bigrama,Desastre real,oil spill,38,0.0014914828479472486
+bigrama,Desastre real,california wildfire,36,0.001412983750686867
+bigrama,Desastre real,suicide bombing,35,0.0013737342020566764
+bigrama,Desastre real,burning building,35,0.0013737342020566764
+bigrama,Desastre real,bomber detonated,30,0.0011774864589057226
+bigrama,Desastre real,year old,29,0.0011382369102755318
+bigrama,Desastre real,home razed,29,0.0011382369102755318
+bigrama,Desastre real,severe thunderstorm,28,0.0010989873616453411
+bigrama,Desastre real,mass murder,28,0.0010989873616453411
+bigrama,Desastre real,latest home,28,0.0010989873616453411
+bigrama,Desastre real,razed northern,28,0.0010989873616453411
+bigrama,Desastre real,pkk suicide,28,0.0010989873616453411
+bigrama,Desastre real,detonated bomb,28,0.0010989873616453411
+bigrama,No desastre,body bag,49,0.00168032646342718
+bigrama,No desastre,cross body,39,0.0013374026953808169
+bigrama,No desastre,liked video,34,0.0011659408113576352
+bigrama,No desastre,full read,28,0.0009601865505298172
+bigrama,No desastre,body bagging,24,0.0008230170433112719
+bigrama,No desastre,burning building,23,0.0007887246665066356
+bigrama,No desastre,reddit quarantine,21,0.0007201399128973629
+bigrama,No desastre,content policy,20,0.0006858475360927266
+bigrama,No desastre,loud bang,19,0.0006515551592880903
+bigrama,No desastre,quarantine offensive,19,0.0006515551592880903
+bigrama,No desastre,emergency service,18,0.0006172627824834539
+bigrama,No desastre,offensive content,18,0.0006172627824834539
+bigrama,No desastre,pick fan,17,0.0005829704056788176
+bigrama,No desastre,fan army,17,0.0005829704056788176
+bigrama,No desastre,fall cliff,17,0.0005829704056788176
+trigrama,Desastre real,suicide bomber detonated,30,0.0013499527516536922
+trigrama,Desastre real,northern california wildfire,29,0.001304954326598569
+trigrama,Desastre real,latest home razed,28,0.001259955901543446
+trigrama,Desastre real,home razed northern,28,0.001259955901543446
+trigrama,Desastre real,pkk suicide bomber,28,0.001259955901543446
+trigrama,Desastre real,bomber detonated bomb,28,0.001259955901543446
+trigrama,Desastre real,razed northern california,27,0.001214957476488323
+trigrama,Desastre real,old pkk suicide,27,0.001214957476488323
+trigrama,Desastre real,family sue legionnaire,26,0.0011699590514331999
+trigrama,Desastre real,family affected fatal,26,0.0011699590514331999
+trigrama,Desastre real,affected fatal outbreak,26,0.0011699590514331999
+trigrama,Desastre real,obama declares disaster,25,0.0011249606263780767
+trigrama,Desastre real,declares disaster typhoon,25,0.0011249606263780767
+trigrama,Desastre real,disaster typhoon devastated,25,0.0011249606263780767
+trigrama,Desastre real,typhoon devastated saipan,25,0.0011249606263780767
+trigrama,No desastre,cross body bag,24,0.0009629659350800466
+trigrama,No desastre,reddit quarantine offensive,19,0.0007623480319383702
+trigrama,No desastre,quarantine offensive content,18,0.000722224451310035
+trigrama,No desastre,pick fan army,17,0.0006821008706816996
+trigrama,No desastre,reddit new content,16,0.0006419772900533643
+trigrama,No desastre,new content policy,16,0.0006419772900533643
+trigrama,No desastre,china stock market,16,0.0006419772900533643
+trigrama,No desastre,stock market crash,16,0.0006419772900533643
+trigrama,No desastre,full read ebay,15,0.0006018537094250291
+trigrama,No desastre,ignition knock detonation,15,0.0006018537094250291
+trigrama,No desastre,knock detonation sensor,15,0.0006018537094250291
+trigrama,No desastre,content policy go,15,0.0006018537094250291
+trigrama,No desastre,policy go effect,15,0.0006018537094250291
+trigrama,No desastre,go effect many,15,0.0006018537094250291
+trigrama,No desastre,effect many horrible,15,0.0006018537094250291

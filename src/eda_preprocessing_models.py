@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
 import nltk
+from scipy.sparse import hstack, csr_matrix
+from scipy.stats import mannwhitneyu
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from wordcloud import WordCloud
@@ -146,7 +148,10 @@ def get_top_ngrams(corpus, n=1, top_k=15):
     sum_words = bag_of_words.sum(axis=0)
     words_freq = [(word, sum_words[0, idx]) for word, idx in vec.vocabulary_.items()]
     words_freq = sorted(words_freq, key=lambda x: x[1], reverse=True)
-    return pd.DataFrame(words_freq[:top_k], columns=['ngram', 'count'])
+    df = pd.DataFrame(words_freq[:top_k], columns=['ngram', 'count'])
+    total = int(sum_words.sum())
+    df['probability'] = df['count'] / total
+    return df
 
 def run_part2_preprocessing_and_ngrams(train_df):
     print("=== EJECUTANDO PARTE 2: PREPROCESAMIENTO Y ANALISIS DE N-GRAMAS ===")
@@ -209,7 +214,35 @@ def run_part2_preprocessing_and_ngrams(train_df):
     plt.tight_layout()
     plt.savefig('docs/figures/top_bigrams.png', dpi=300)
     plt.close()
-    
+
+    # Trigramas
+    top_tri_disaster = get_top_ngrams(disaster_corpus, n=3, top_k=15)
+    top_tri_nondisaster = get_top_ngrams(nondisaster_corpus, n=3, top_k=15)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    sns.barplot(x='count', y='ngram', data=top_tri_disaster, ax=axes[0], palette='Reds_r', hue='ngram', legend=False)
+    axes[0].set_title('Top 15 Trigramas en Desastres Reales')
+    axes[0].set_xlabel('Frecuencia')
+
+    sns.barplot(x='count', y='ngram', data=top_tri_nondisaster, ax=axes[1], palette='Blues_r', hue='ngram', legend=False)
+    axes[1].set_title('Top 15 Trigramas en No Desastres')
+    axes[1].set_xlabel('Frecuencia')
+    plt.tight_layout()
+    plt.savefig('docs/figures/top_trigrams.png', dpi=300)
+    plt.close()
+
+    # Tabla de frecuencias y probabilidades por n-grama y clase
+    tablas = []
+    for n, nombre in [(1, 'unigrama'), (2, 'bigrama'), (3, 'trigrama')]:
+        for corpus, clase in [(disaster_corpus, 'Desastre real'), (nondisaster_corpus, 'No desastre')]:
+            t = get_top_ngrams(corpus, n=n, top_k=15).copy()
+            t.insert(0, 'tipo', nombre)
+            t.insert(1, 'clase', clase)
+            tablas.append(t)
+    ngram_table = pd.concat(tablas, ignore_index=True)
+    ngram_table.to_csv('docs/figures/ngram_frequencies.csv', index=False)
+    print("Frecuencias y probabilidades de n-gramas guardadas en docs/figures/ngram_frequencies.csv")
+
     return train_df
 
 def run_part3_models(train_df):
@@ -309,18 +342,7 @@ def run_part3_models(train_df):
 
 
 def run_part4_classification_function(train_df):
-    """
-    Ejercicio 7: Funcion de clasificacion de tweets.
-
-    Se selecciona la Regresion Logistica como modelo final: en la comparacion
-    preliminar (docs/figures/preliminary_metrics.csv) obtuvo el mejor ROC-AUC
-    (0.8753) y un F1-Score competitivo (0.7752), ademas de producir
-    probabilidades bien calibradas via predict_proba, utiles para la funcion
-    de clasificacion. El modelo se reentrena usando el 100% del conjunto de
-    entrenamiento limpio (en lugar del 80% usado para la comparacion
-    preliminar) para maximizar la informacion disponible antes de exponerlo
-    como funcion de uso general.
-    """
+    """Ejercicio 7: entrena la Regresion Logistica final sobre el 100% de train."""
     print("=== EJECUTANDO PARTE 4: FUNCION DE CLASIFICACION DE TWEETS ===")
 
     os.makedirs('models', exist_ok=True)
@@ -343,31 +365,10 @@ def run_part4_classification_function(train_df):
 
 
 def classify_tweet(text, model=None, vectorizer=None):
-    """
-    Clasifica un tweet crudo (SIN preprocesar) como desastre real (1) o no (0).
+    """Clasifica un tweet crudo como desastre real (1) o no (0).
 
-    Parametros
-    ----------
-    text : str
-        Texto del tweet tal como lo escribiria un usuario, sin ningun
-        preprocesamiento previo. La funcion se encarga internamente de
-        aplicar el mismo pipeline de limpieza usado durante el entrenamiento
-        (clean_text).
-    model : sklearn estimator, opcional
-        Modelo entrenado. Si es None, se carga desde
-        'models/best_model_logreg.joblib'.
-    vectorizer : sklearn TfidfVectorizer, opcional
-        Vectorizador TF-IDF entrenado. Si es None, se carga desde
-        'models/tfidf_vectorizer.joblib'.
-
-    Retorna
-    -------
-    dict con las llaves:
-        'text'          : el texto original ingresado por el usuario
-        'cleaned_text'  : el texto luego del preprocesamiento interno
-        'label'         : 1 si se predice desastre real, 0 en caso contrario
-        'label_desc'    : "Desastre real" o "No es un desastre"
-        'probability'   : probabilidad estimada de que sea un desastre real
+    Aplica clean_text internamente. Si no se pasan model y vectorizer, los carga
+    desde models/. Retorna text, cleaned_text, label, label_desc y probability.
     """
     if model is None or vectorizer is None:
         model = joblib.load('models/best_model_logreg.joblib')
@@ -404,9 +405,292 @@ def run_part4_demo(model=None, vectorizer=None):
         print(f"  -> Prediccion: {resultado['label_desc']} (prob. desastre = {resultado['probability']:.4f})")
 
 
+# Exige que el emoticon inicie tras un espacio y cierre en limite de palabra,
+# para no confundir el ':/' de las URLs con una carita.
+EMOTICON_RE = re.compile(
+    r"""(?:(?<=\s)|^)[:;=][\-o\*']?[\)\(\[\]DpP/\\\|\{\}@3]+(?=\s|$|[.,!?"'])"""
+    r"""|(?:(?<=\s)|^)[xX]D(?=\s|$)"""
+    r"""|<3"""
+    r"""|[\U0001F300-\U0001FAFF☀-➿]"""
+)
+
+_sia = None
+_pos_lex = None
+_neg_lex = None
+
+
+def ensure_sentiment_resources():
+    """Carga VADER y el lexico de opinion de Hu y Liu."""
+    global _sia, _pos_lex, _neg_lex
+    if _sia is None:
+        for res in ['vader_lexicon', 'opinion_lexicon']:
+            try:
+                nltk.download(res, quiet=True)
+            except Exception:
+                pass
+        from nltk.sentiment.vader import SentimentIntensityAnalyzer
+        from nltk.corpus import opinion_lexicon
+        _sia = SentimentIntensityAnalyzer()
+        _pos_lex = set(opinion_lexicon.positive())
+        _neg_lex = set(opinion_lexicon.negative())
+    return _sia, _pos_lex, _neg_lex
+
+
+def count_sentiment_words(text):
+    """Cuenta palabras positivas y negativas segun el lexico de opinion."""
+    _, pos_lex, neg_lex = ensure_sentiment_resources()
+    tokens = str(text).split()
+    n_pos = sum(1 for t in tokens if t in pos_lex)
+    n_neg = sum(1 for t in tokens if t in neg_lex)
+    return n_pos, n_neg
+
+
+def label_from_counts(n_pos, n_neg):
+    if n_pos > n_neg:
+        return 'positivo'
+    if n_neg > n_pos:
+        return 'negativo'
+    return 'neutro'
+
+
+def score_sentiment(raw_text, cleaned_text):
+    """Conteos de palabras de opinion y puntajes VADER de un tweet."""
+    sia, _, _ = ensure_sentiment_resources()
+    n_pos, n_neg = count_sentiment_words(cleaned_text)
+    total = n_pos + n_neg
+    vs = sia.polarity_scores(str(raw_text))
+    return {
+        'n_pos': n_pos,
+        'n_neg': n_neg,
+        'lex_score': (n_pos - n_neg) / total if total else 0.0,
+        'sentiment_lex': label_from_counts(n_pos, n_neg),
+        'vader_neg': vs['neg'],
+        'vader_neu': vs['neu'],
+        'vader_pos': vs['pos'],
+        'vader_compound': vs['compound'],
+        'negatividad': vs['neg']
+    }
+
+
+def run_part5_sentiment(train_df):
+    """Ejercicio 8: clasificacion de cada tweet en positivo, negativo o neutro."""
+    print("=== EJECUTANDO PARTE 5: ANALISIS DE SENTIMIENTO (EJERCICIO 8) ===")
+    ensure_sentiment_resources()
+
+    scores = [score_sentiment(r, c) for r, c in zip(train_df['text'], train_df['cleaned_text'])]
+    train_df = pd.concat([train_df.reset_index(drop=True), pd.DataFrame(scores)], axis=1)
+
+    train_df['sentimiento'] = pd.cut(
+        train_df['vader_compound'],
+        bins=[-1.001, -0.05, 0.05, 1.0],
+        labels=['negativo', 'neutro', 'positivo']
+    ).astype(str)
+
+    print("\nDistribucion por conteo de palabras (lexico de opinion):")
+    print(train_df['sentiment_lex'].value_counts())
+    print("\nDistribucion por VADER:")
+    print(train_df['sentimiento'].value_counts())
+
+    # Impacto de conservar los emoticones
+    sia, _, _ = ensure_sentiment_resources()
+    tiene_emoticon = train_df['text'].astype(str).str.contains(EMOTICON_RE)
+    sin_emoticon_txt = train_df['text'].astype(str).apply(lambda t: EMOTICON_RE.sub(' ', t))
+    compound_sin = sin_emoticon_txt.apply(lambda t: sia.polarity_scores(t)['compound'])
+    diff = (train_df['vader_compound'] - compound_sin).abs()
+    cambia = diff > 1e-9
+
+    emoticon_stats = pd.DataFrame([{
+        'tweets_totales': len(train_df),
+        'tweets_con_emoticon': int(tiene_emoticon.sum()),
+        'porcentaje_con_emoticon': round(tiene_emoticon.mean() * 100, 2),
+        'tweets_con_puntaje_alterado': int(cambia.sum()),
+        'porcentaje_puntaje_alterado': round(cambia.mean() * 100, 2),
+        'diferencia_media_abs_compound': round(diff.mean(), 4),
+        'diferencia_media_abs_en_afectados': round(diff[cambia].mean(), 4) if cambia.any() else 0.0
+    }])
+    emoticon_stats.to_csv('docs/figures/emoticon_impact.csv', index=False)
+    print("\nImpacto de conservar emoticones:")
+    print(emoticon_stats.to_string(index=False))
+
+    ct = pd.crosstab(train_df['target'], train_df['sentimiento'], normalize='index') * 100
+    ct = ct.reindex(columns=['negativo', 'neutro', 'positivo'])
+    ct.to_csv('docs/figures/sentiment_by_target.csv')
+
+    plt.figure(figsize=(8, 5))
+    ct.plot(kind='bar', color=['#d9534f', '#9e9e9e', '#2b8f5c'], ax=plt.gca())
+    plt.title('Distribucion de Sentimiento por Categoria de Tweet')
+    plt.xlabel('Clase (0 = No Desastre, 1 = Desastre Real)')
+    plt.ylabel('Porcentaje dentro de la clase (%)')
+    plt.xticks([0, 1], ['No Desastre (0)', 'Desastre Real (1)'], rotation=0)
+    plt.legend(title='Sentimiento')
+    plt.tight_layout()
+    plt.savefig('docs/figures/sentiment_distribution.png', dpi=300)
+    plt.close()
+
+    return train_df
+
+
+def _printable(df, col='text'):
+    """Sustituye caracteres no ASCII para poder imprimir en consolas Windows."""
+    out = df.copy()
+    out[col] = out[col].astype(str).str.encode('ascii', 'ignore').str.decode('ascii')
+    return out
+
+
+def run_part6_sentiment_questions(train_df):
+    """Ejercicio 9: tweets mas negativos y mas positivos, negatividad por categoria."""
+    print("=== EJECUTANDO PARTE 6: PREGUNTAS DE SENTIMIENTO (EJERCICIO 9) ===")
+    cols = ['id', 'text', 'target', 'vader_compound', 'n_pos', 'n_neg']
+
+    top_neg = train_df.nsmallest(10, 'vader_compound')[cols].copy()
+    top_pos = train_df.nlargest(10, 'vader_compound')[cols].copy()
+    for t in (top_neg, top_pos):
+        t['categoria'] = t['target'].map({0: 'No desastre', 1: 'Desastre real'})
+
+    top_neg.to_csv('docs/figures/top10_negativos.csv', index=False, encoding='utf-8')
+    top_pos.to_csv('docs/figures/top10_positivos.csv', index=False, encoding='utf-8')
+
+    print("\n9.1 Diez tweets mas negativos:")
+    print(_printable(top_neg)[['text', 'categoria', 'vader_compound']].to_string(index=False, max_colwidth=70))
+    print("\n9.2 Diez tweets mas positivos:")
+    print(_printable(top_pos)[['text', 'categoria', 'vader_compound']].to_string(index=False, max_colwidth=70))
+
+    neg_des = train_df.loc[train_df['target'] == 1, 'negatividad']
+    neg_no = train_df.loc[train_df['target'] == 0, 'negatividad']
+    u_stat, p_val = mannwhitneyu(neg_des, neg_no, alternative='greater')
+
+    comparacion = pd.DataFrame([
+        {'categoria': 'Desastre real (1)', 'n': len(neg_des),
+         'negatividad_media': neg_des.mean(), 'negatividad_mediana': neg_des.median(),
+         'compound_medio': train_df.loc[train_df['target'] == 1, 'vader_compound'].mean()},
+        {'categoria': 'No desastre (0)', 'n': len(neg_no),
+         'negatividad_media': neg_no.mean(), 'negatividad_mediana': neg_no.median(),
+         'compound_medio': train_df.loc[train_df['target'] == 0, 'vader_compound'].mean()}
+    ])
+    comparacion['U_mannwhitney'] = u_stat
+    comparacion['p_value'] = p_val
+    comparacion.to_csv('docs/figures/negativity_by_target.csv', index=False)
+
+    print("\n9.3 Negatividad por categoria:")
+    print(comparacion.to_string(index=False))
+    print("Mann-Whitney (desastre > no desastre): U = %.1f, p = %.3e" % (u_stat, p_val))
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    sns.boxplot(data=train_df, x='target', y='negatividad', ax=axes[0],
+                palette=['#2b5c8f', '#d9534f'], hue='target', legend=False)
+    axes[0].set_title('Negatividad por Categoria')
+    axes[0].set_xlabel('Clase (0 = No Desastre, 1 = Desastre Real)')
+    axes[0].set_ylabel('Negatividad (VADER)')
+    axes[0].set_xticks([0, 1])
+    axes[0].set_xticklabels(['No Desastre', 'Desastre Real'])
+
+    sns.kdeplot(data=train_df, x='vader_compound', hue='target', fill=True, ax=axes[1],
+                palette=['#2b5c8f', '#d9534f'], common_norm=False)
+    axes[1].set_title('Distribucion del Puntaje Compound por Categoria')
+    axes[1].set_xlabel('Puntaje compound (VADER)')
+    axes[1].set_ylabel('Densidad')
+    plt.tight_layout()
+    plt.savefig('docs/figures/negativity_by_target.png', dpi=300)
+    plt.close()
+
+    return top_neg, top_pos, comparacion
+
+
+def run_part7_negativity_model(train_df):
+    """Ejercicio 10: reentrenamiento de los modelos incluyendo la negatividad."""
+    print("=== EJECUTANDO PARTE 7: MODELOS CON VARIABLE DE NEGATIVIDAD (EJERCICIO 10) ===")
+
+    X = train_df['cleaned_text']
+    y = train_df['target']
+    neg = train_df[['negatividad']].values
+
+    X_train, X_val, y_train, y_val, neg_train, neg_val = train_test_split(
+        X, y, neg, test_size=0.2, random_state=42, stratify=y
+    )
+
+    tfidf = TfidfVectorizer(ngram_range=(1, 2), max_features=10000, sublinear_tf=True)
+    X_train_vec = tfidf.fit_transform(X_train)
+    X_val_vec = tfidf.transform(X_val)
+
+    X_train_neg = hstack([X_train_vec, csr_matrix(neg_train)]).tocsr()
+    X_val_neg = hstack([X_val_vec, csr_matrix(neg_val)]).tocsr()
+
+    def build_models():
+        return {
+            'Multinomial Naive Bayes': MultinomialNB(alpha=1.0),
+            'Complement Naive Bayes': ComplementNB(alpha=1.0),
+            'Logistic Regression': LogisticRegression(C=1.0, max_iter=1000, random_state=42),
+            'Linear SVM (SGD)': SGDClassifier(loss='log_loss', penalty='l2', random_state=42)
+        }
+
+    filas = []
+    for etiqueta, Xtr, Xva in [('Sin negatividad', X_train_vec, X_val_vec),
+                               ('Con negatividad', X_train_neg, X_val_neg)]:
+        for nombre, modelo in build_models().items():
+            modelo.fit(Xtr, y_train)
+            y_pred = modelo.predict(Xva)
+            y_proba = modelo.predict_proba(Xva)[:, 1]
+            acc = accuracy_score(y_val, y_pred)
+            p, r, f1, _ = precision_recall_fscore_support(y_val, y_pred, average='binary')
+            filas.append({'Conjunto': etiqueta, 'Modelo': nombre, 'Accuracy': acc,
+                          'Precision': p, 'Recall': r, 'F1-Score': f1,
+                          'ROC-AUC': roc_auc_score(y_val, y_proba)})
+
+    comp = pd.DataFrame(filas)
+    comp.to_csv('docs/figures/metrics_with_negativity.csv', index=False)
+
+    pivote = comp.pivot(index='Modelo', columns='Conjunto', values=['Accuracy', 'F1-Score', 'ROC-AUC'])
+    delta = pd.DataFrame({
+        'Modelo': pivote.index,
+        'Delta_Accuracy': pivote['Accuracy']['Con negatividad'] - pivote['Accuracy']['Sin negatividad'],
+        'Delta_F1': pivote['F1-Score']['Con negatividad'] - pivote['F1-Score']['Sin negatividad'],
+        'Delta_ROC_AUC': pivote['ROC-AUC']['Con negatividad'] - pivote['ROC-AUC']['Sin negatividad']
+    }).reset_index(drop=True)
+    delta.to_csv('docs/figures/negativity_delta.csv', index=False)
+
+    print("\nComparacion de modelos con y sin la variable de negatividad:")
+    print(comp.to_string(index=False))
+    print("\nDiferencia (Con negatividad menos Sin negatividad):")
+    print(delta.to_string(index=False))
+
+    plt.figure(figsize=(10, 5))
+    sns.barplot(data=comp, x='Modelo', y='F1-Score', hue='Conjunto', palette=['#2b5c8f', '#d9534f'])
+    plt.title('F1-Score con y sin la Variable de Negatividad')
+    plt.ylim(0.6, 0.85)
+    plt.ylabel('F1-Score')
+    plt.xticks(rotation=15)
+    plt.tight_layout()
+    plt.savefig('docs/figures/negativity_model_comparison.png', dpi=300)
+    plt.close()
+
+    # Poder discriminativo de la negatividad por si sola y sensibilidad al peso
+    auc_sola = roc_auc_score(y_val, neg_val.ravel())
+    sens = [{'peso': 0.0, 'F1-Score': None, 'ROC-AUC': auc_sola, 'nota': 'negatividad como unico predictor'}]
+    for w in [1, 5, 10, 25]:
+        Xtr_w = hstack([X_train_vec, csr_matrix(neg_train * w)]).tocsr()
+        Xva_w = hstack([X_val_vec, csr_matrix(neg_val * w)]).tocsr()
+        m = LogisticRegression(C=1.0, max_iter=1000, random_state=42).fit(Xtr_w, y_train)
+        pred = m.predict(Xva_w)
+        _, _, f1, _ = precision_recall_fscore_support(y_val, pred, average='binary')
+        sens.append({'peso': w, 'F1-Score': f1,
+                     'ROC-AUC': roc_auc_score(y_val, m.predict_proba(Xva_w)[:, 1]),
+                     'nota': 'TF-IDF + negatividad escalada (Regresion Logistica)'})
+    sens_df = pd.DataFrame(sens)
+    sens_df.to_csv('docs/figures/negativity_sensitivity.csv', index=False)
+    print('\nPoder discriminativo de la negatividad y sensibilidad a su escala:')
+    print(sens_df.to_string(index=False))
+
+    return comp, delta
+
+
 if __name__ == '__main__':
     train_df, test_df = run_part1_eda()
     train_df = run_part2_preprocessing_and_ngrams(train_df)
     res_df = run_part3_models(train_df)
     best_model, tfidf_final = run_part4_classification_function(train_df)
     run_part4_demo(best_model, tfidf_final)
+    train_df = run_part5_sentiment(train_df)
+    run_part6_sentiment_questions(train_df)
+    run_part7_negativity_model(train_df)
+    train_df.to_csv('data/train_processed.csv', index=False, encoding='utf-8')
+    print(chr(10) + 'Dataset con sentimiento y negatividad guardado en data/train_processed.csv')
