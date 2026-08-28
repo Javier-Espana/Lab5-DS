@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
 import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
@@ -306,7 +307,106 @@ def run_part3_models(train_df):
     print("Figuras de Parte 3 generadas con exito.")
     return res_df
 
+
+def run_part4_classification_function(train_df):
+    """
+    Ejercicio 7: Funcion de clasificacion de tweets.
+
+    Se selecciona la Regresion Logistica como modelo final: en la comparacion
+    preliminar (docs/figures/preliminary_metrics.csv) obtuvo el mejor ROC-AUC
+    (0.8753) y un F1-Score competitivo (0.7752), ademas de producir
+    probabilidades bien calibradas via predict_proba, utiles para la funcion
+    de clasificacion. El modelo se reentrena usando el 100% del conjunto de
+    entrenamiento limpio (en lugar del 80% usado para la comparacion
+    preliminar) para maximizar la informacion disponible antes de exponerlo
+    como funcion de uso general.
+    """
+    print("=== EJECUTANDO PARTE 4: FUNCION DE CLASIFICACION DE TWEETS ===")
+
+    os.makedirs('models', exist_ok=True)
+
+    X_full = train_df['cleaned_text']
+    y_full = train_df['target']
+
+    tfidf_final = TfidfVectorizer(ngram_range=(1, 2), max_features=10000, sublinear_tf=True)
+    X_full_vec = tfidf_final.fit_transform(X_full)
+
+    best_model = LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+    best_model.fit(X_full_vec, y_full)
+
+    joblib.dump(best_model, 'models/best_model_logreg.joblib')
+    joblib.dump(tfidf_final, 'models/tfidf_vectorizer.joblib')
+
+    print("Modelo final (Regresion Logistica) y vectorizador TF-IDF guardados en 'models/'.")
+
+    return best_model, tfidf_final
+
+
+def classify_tweet(text, model=None, vectorizer=None):
+    """
+    Clasifica un tweet crudo (SIN preprocesar) como desastre real (1) o no (0).
+
+    Parametros
+    ----------
+    text : str
+        Texto del tweet tal como lo escribiria un usuario, sin ningun
+        preprocesamiento previo. La funcion se encarga internamente de
+        aplicar el mismo pipeline de limpieza usado durante el entrenamiento
+        (clean_text).
+    model : sklearn estimator, opcional
+        Modelo entrenado. Si es None, se carga desde
+        'models/best_model_logreg.joblib'.
+    vectorizer : sklearn TfidfVectorizer, opcional
+        Vectorizador TF-IDF entrenado. Si es None, se carga desde
+        'models/tfidf_vectorizer.joblib'.
+
+    Retorna
+    -------
+    dict con las llaves:
+        'text'          : el texto original ingresado por el usuario
+        'cleaned_text'  : el texto luego del preprocesamiento interno
+        'label'         : 1 si se predice desastre real, 0 en caso contrario
+        'label_desc'    : "Desastre real" o "No es un desastre"
+        'probability'   : probabilidad estimada de que sea un desastre real
+    """
+    if model is None or vectorizer is None:
+        model = joblib.load('models/best_model_logreg.joblib')
+        vectorizer = joblib.load('models/tfidf_vectorizer.joblib')
+
+    cleaned = clean_text(text)
+    vec = vectorizer.transform([cleaned])
+
+    pred = int(model.predict(vec)[0])
+    proba = float(model.predict_proba(vec)[0, 1]) if hasattr(model, 'predict_proba') else None
+
+    return {
+        'text': text,
+        'cleaned_text': cleaned,
+        'label': pred,
+        'label_desc': 'Desastre real' if pred == 1 else 'No es un desastre',
+        'probability': proba
+    }
+
+
+def run_part4_demo(model=None, vectorizer=None):
+    print("\n=== DEMO: CLASIFICACION DE TWEETS NUEVOS (SIN PREPROCESAR) ===")
+    ejemplos = [
+        "Forest fire near La Ronge Sask. Canada",
+        "This new album is fire, I can't stop listening to it!",
+        "BREAKING: Massive earthquake hits downtown, buildings collapsing #emergency",
+        "I'm drowning in homework this week lol",
+        "Call 911 immediately, there's been an explosion at the factory",
+        "Just had the best burger of my life at this new restaurant downtown",
+    ]
+    for tweet in ejemplos:
+        resultado = classify_tweet(tweet, model=model, vectorizer=vectorizer)
+        print(f"\nTweet: {resultado['text']}")
+        print(f"  -> Prediccion: {resultado['label_desc']} (prob. desastre = {resultado['probability']:.4f})")
+
+
 if __name__ == '__main__':
     train_df, test_df = run_part1_eda()
     train_df = run_part2_preprocessing_and_ngrams(train_df)
     res_df = run_part3_models(train_df)
+    best_model, tfidf_final = run_part4_classification_function(train_df)
+    run_part4_demo(best_model, tfidf_final)
