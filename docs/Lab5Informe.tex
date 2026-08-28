@@ -258,13 +258,46 @@ En la Figura~\ref{fig:cm_preliminary} se detallan las matrices de confusión de 
     \item \textbf{Linear SVM (SGD):} Obtiene el mayor F1-Score ($0.7787$) y la mejor sensibilidad/recall ($73.70\%$), resultando idóneo si la prioridad operativa consiste en no omitir desastres reales.
 \end{itemize}
 
+\section{Función de Clasificación de Tweets}
+Con el fin de dar respuesta al Ejercicio 7 del laboratorio, se implementó una función que permite clasificar tweets nuevos ingresados por un usuario \textbf{sin ningún preprocesamiento previo}.
+
+\subsection{Selección del Modelo Final}
+De los cuatro modelos preliminares comparados en la Sección~6, se seleccionó la \textbf{Regresión Logística} como modelo final: obtuvo el mayor ROC-AUC ($0.8753$) de los cuatro algoritmos evaluados, junto con un F1-Score competitivo ($0.7752$), y produce probabilidades bien calibradas mediante \texttt{predict\_proba}, lo cual resulta útil para reportar el nivel de confianza de cada predicción. Con el objetivo de aprovechar la totalidad de la información disponible antes de exponer el modelo como herramienta de uso general, tanto el vectorizador TF-IDF como el clasificador se reentrenaron utilizando el $100\%$ del conjunto de entrenamiento limpio (en la comparación preliminar de la Sección~6 solo se empleó el $80\%$, reservando el resto para validación).
+
+\subsection{Diseño de la Función}
+La función \texttt{classify\_tweet(text, model, vectorizer)} recibe como único parámetro obligatorio el texto crudo del tweet y ejecuta internamente el mismo pipeline de limpieza (\texttt{clean\_text}) utilizado durante el entrenamiento, de modo que el usuario final no necesita preprocesar el texto manualmente. La función retorna la etiqueta predicha (\textit{Desastre real} / \textit{No es un desastre}) junto con la probabilidad estimada de que el tweet corresponda a un desastre real. El modelo y el vectorizador finales se serializaron con \texttt{joblib} en \texttt{models/best\_model\_logreg.joblib} y \texttt{models/tfidf\_vectorizer.joblib}, permitiendo su reutilización sin necesidad de reentrenar.
+
+\subsection{Pruebas de la Función}
+La Tabla~\ref{tab:classify_examples} presenta los resultados obtenidos al evaluar la función sobre un conjunto de tweets de prueba, incluyendo casos ambiguos que combinan el uso literal y metafórico de la palabra \textit{fire}.
+
+\begin{table}[H]
+\centering
+\caption{Resultados de la función de clasificación sobre tweets nuevos sin preprocesar.}
+\label{tab:classify_examples}
+\begin{tabular}{lp{7.2cm}cc}
+\toprule
+\textbf{\#} & \textbf{Tweet} & \textbf{Predicción} & \textbf{Prob. desastre} \\
+\midrule
+1 & Forest fire near La Ronge Sask. Canada & Desastre real & 0.9186 \\
+2 & This new album is fire, I can't stop listening to it! & No es un desastre & 0.2667 \\
+3 & BREAKING: Massive earthquake hits downtown, buildings collapsing \#emergency & Desastre real & 0.8762 \\
+4 & I'm drowning in homework this week lol & No es un desastre & 0.1351 \\
+5 & Call 911 immediately, there's been an explosion at the factory & Desastre real & 0.6547 \\
+6 & Just had the best burger of my life at this new restaurant downtown & No es un desastre & 0.2055 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Los resultados confirman que la función distingue correctamente el uso literal de \textit{fire} (tweet 1) del uso metafórico (tweet 2), y que preservar el token \texttt{emergency911} durante el preprocesamiento (Sección~3) contribuye a que el tweet 5 sea clasificado como desastre real con probabilidad considerable, validando esa decisión de diseño.
+
 \section{Conclusiones de la Entrega Parcial y Trabajo Futuro}
 \begin{enumerate}
     \item El análisis exploratorio inicial permitió identificar la estructura del dataset, confirmando que no existen valores faltantes en la variable objetivo ni en el texto principal, y revelando diferencias estadísticas en la longitud de caracteres y vocabulario clave entre desastres reales y metáforas.
     \item El pipeline de preprocesamiento logró normalizar de forma limpia el texto de redes sociales, eliminando URLs, menciones y puntuación, mientras que la regla ad-hoc para preservar el código de emergencia \texttt{911} protegió un token crítico para la predicción.
     \item El estudio de n-gramas evidenció que los unigramas por sí solos presentan ambigüedad severa ante términos polisémicos (\textit{fire}, \textit{body}, \textit{building}), mientras que los bigramas proporcionan el contexto discriminativo indispensable.
     \item Los modelos preliminares basados en TF-IDF lograron superar el $82\%$ de exactitud y $0.875$ de ROC-AUC en validación estratificada, estableciendo una línea base sólida.
-    \item \textbf{Pasos para la entrega final:} Incorporación de análisis de polaridad y sentimiento (TextBlob / VADER / SentiWordNet), ingeniería de características contextuales (variable de negatividad, longitudes, palabras en mayúsculas), ajuste de hiperparámetros (\textit{GridSearchCV}), evaluación de modelos avanzados y desarrollo de la función interactiva de clasificación de tweets para usuarios finales.
+    \item Se desarrolló y validó la función de clasificación de tweets (Sección~7), la cual recibe un tweet crudo y retorna si se refiere a un desastre real, utilizando el modelo de Regresión Logística reentrenado con el $100\%$ de los datos de entrenamiento.
+    \item \textbf{Pasos pendientes para la entrega final:} Incorporación de análisis de polaridad y sentimiento (TextBlob / VADER / SentiWordNet) para clasificar cada tweet como positivo, negativo o neutro; creación de la variable de "negatividad" del tweet y reentrenamiento del modelo incluyéndola como característica adicional; respuesta a las preguntas sobre los tweets más positivos/negativos y su relación con la categoría de desastre real; y ajuste de hiperparámetros (\textit{GridSearchCV}) para la selección final del mejor modelo.
 \end{enumerate}
 
 \section*{Referencias}
