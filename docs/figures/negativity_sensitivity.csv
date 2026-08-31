@@ -1,6 +1,6 @@
 peso,F1-Score,ROC-AUC,nota
 0.0,,0.5726378874096908,negatividad como unico predictor
-1.0,0.7696118909991743,0.8741593733174269,TF-IDF + negatividad escalada (Regresion Logistica)
-5.0,0.7669421487603306,0.8739922157353349,TF-IDF + negatividad escalada (Regresion Logistica)
-10.0,0.7692307692307693,0.8739482268979425,TF-IDF + negatividad escalada (Regresion Logistica)
-25.0,0.7669421487603306,0.8739869370748479,TF-IDF + negatividad escalada (Regresion Logistica)
+1.0,0.7702479338842976,0.8741558542104355,TF-IDF + negatividad escalada (Regresion Logistica)
+5.0,0.7675765095119934,0.8739499864514382,TF-IDF + negatividad escalada (Regresion Logistica)
+10.0,0.7675765095119934,0.8739429482374552,TF-IDF + negatividad escalada (Regresion Logistica)
+25.0,0.7675765095119934,0.8739218335955068,TF-IDF + negatividad escalada (Regresion Logistica)

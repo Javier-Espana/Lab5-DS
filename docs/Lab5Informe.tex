@@ -12,6 +12,7 @@
 \usepackage{microtype}
 \usepackage{caption}
 \usepackage{subcaption}
+\usepackage{tabularx}
 
 \hypersetup{
     colorlinks=true,
@@ -21,7 +22,7 @@
 }
 
 \title{\textbf{Laboratorio 5: Minería de Textos y Clasificación de Tweets sobre Desastres Naturales}\\
-\large Entrega Parcial: Avances de Exploración, Preprocesamiento y Modelado Preliminar}
+\large Informe Final: Exploración, Preprocesamiento, Modelado, Clasificación Interactiva y Análisis de Sentimiento}
 
 \author{
     \textbf{Javier Eduardo España} (23361)\\
@@ -37,29 +38,29 @@
 \maketitle
 
 \begin{abstract}
-En el presente informe de avance se documentan los resultados del procesamiento de lenguaje natural y minería de texto sobre el conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se detallan las dimensiones y características estructurales del dataset, el análisis exploratorio de datos (EDA), el comportamiento de atributos como palabras clave y ubicaciones, y la distribución de longitudes de texto. Asimismo, se expone de forma minuciosa la metodología de preprocesamiento, el tratamiento diferenciado de entidades, la generación de n-gramas (unigramas, bigramas y trigramas), la visualización de frecuencias léxicas mediante nubes de palabras e histogramas, y el análisis de la necesidad de contexto. Finalmente, se diseñan, entrenan y evalúan cuatro arquitecturas preliminares de clasificación (\textit{Multinomial Naive Bayes}, \textit{Complement Naive Bayes}, \textit{Logistic Regression} y \textit{Linear SVM}) sobre representaciones TF-IDF que incorporan unigramas y bigramas, discutiendo su desempeño y estableciendo la base para la entrega final.
+En este informe se presenta el desarrollo exhaustivo del Laboratorio 5 sobre minería de textos, procesamiento de lenguaje natural (NLP) y análisis de sentimiento aplicado a la clasificación de tweets del conjunto de datos \textit{Natural Language Processing with Disaster Tweets} de Kaggle. Se describe el análisis exploratorio de datos (EDA), identificando patrones en variables categóricas, longitudes de texto y tasas de datos faltantes. Se implementa un pipeline de preprocesamiento para redes sociales que normaliza el texto, elimina ruido y preserva información crítica (como el código de auxilio \texttt{911}). Se realiza un análisis profundo de frecuencias y probabilidades de n-gramas (unigramas, bigramas y trigramas), demostrando la necesidad imperativa del contexto para resolver la ambigüedad de términos polisémicos. Se entrenan y comparan cuatro modelos de aprendizaje automático (\textit{Multinomial Naive Bayes}, \textit{Complement Naive Bayes}, \textit{Regresión Logística} y \textit{Linear SVM}), seleccionando la Regresión Logística como el mejor clasificador general ($ROC\text{-}AUC = 0.8753$) para alimentar una función interactiva que clasifica tweets nuevos sin preprocesar. Finalmente, se clasifica la polaridad de los tweets mediante léxicos de opinión y VADER, evaluando el impacto de los emoticones, respondiendo a interrogantes sobre los tweets extremos de sentimiento y determinando que los tweets de desastres reales son significativamente más negativos ($p = 2.004 \times 10^{-30}$). La incorporación de la variable de negatividad al vectorizador TF-IDF fue evaluada, demostrándose que no genera mejoras sustanciales debido a la redundancia con las características léxicas ya capturadas por TF-IDF.
 \end{abstract}
 
 \section{Introducción}
-La rápida proliferación de redes sociales, en particular plataformas de microblogging como X (anteriormente Twitter), ha transformado la comunicación en situaciones de emergencia. Durante eventos catastróficos (terremotos, inundaciones, incendios forestales), los usuarios publican testimonios en tiempo real que son de alto valor para agencias de respuesta y organizaciones de ayuda humanitaria.
+La proliferación masiva de plataformas de microblogging, en particular Twitter/X, ha transformado los canales de comunicación durante situaciones de emergencia. Ante eventos catastróficos como terremotos, inundaciones, incendios forestales o ataques terroristas, los usuarios publican advertencias, reportes y testimonios en tiempo real. Estos datos son de valor incalculable para organizaciones de rescate, agencias gubernamentales y medios de comunicación.
 
-No obstante, clasificar de manera automatizada si un tweet describe una emergencia real o utiliza lenguaje metafórico (por ejemplo, \textit{"The new album is fire"} o \textit{"I'm drowning in homework"}) representa un reto significativo en el Procesamiento de Lenguaje Natural (NLP). El objetivo fundamental de este laboratorio es construir un sistema de minería de texto y aprendizaje automático capaz de discriminar entre tweets que reportan desastres reales ($target = 1$) y aquellos que no ($target = 0$).
+Sin embargo, filtrar y clasificar estos mensajes mediante sistemas automatizados presenta dificultades severas: los usuarios emplean frecuentemente lenguaje coloquial, sarcasmo, abreviaturas y metáforas (por ejemplo, \textit{"This song is fire"} o \textit{"I'm drowning in exams"}). El presente trabajo aborda de manera integral este problema mediante técnicas de minería de texto y aprendizaje supervisado, clasificando si un tweet describe un desastre real ($target = 1$) o si se trata de un mensaje ordinario ($target = 0$), complementando la investigación con análisis de sentimiento.
 
 \section{Descripción del Conjunto de Datos y Análisis Exploratorio}
-El conjunto de datos utilizado corresponde a la competencia oficial de Kaggle \textit{"Natural Language Processing with Disaster Tweets"}. Está compuesto por más de 10,800 observaciones distribuidas en conjuntos de entrenamiento (\texttt{train.csv}) y prueba (\texttt{test.csv}).
+El conjunto de datos utilizado corresponde a la competencia oficial de Kaggle \textit{"Natural Language Processing with Disaster Tweets"}. Cuenta con más de 10,800 tweets divididos en entrenamiento (\texttt{train.csv}, 7,613 filas) y prueba (\texttt{test.csv}, 3,263 filas).
 
 \subsection{Estructura de Variables}
-El conjunto de entrenamiento contiene 7,613 filas y 5 columnas principales:
+El conjunto de entrenamiento incluye cinco variables:
 \begin{itemize}
-    \item \textbf{id}: Identificador numérico único de cada tweet.
-    \item \textbf{keyword}: Palabra clave relevante asociada al tweet (puede contener valores nulos).
-    \item \textbf{location}: Ubicación geográfica declarada por el autor (texto libre, alta tasa de valores nulos).
-    \item \textbf{text}: Contenido textual íntegro del tweet.
-    \item \textbf{target}: Etiqueta binaria de clasificación donde 1 denota un desastre real y 0 denota no desastre.
+    \item \textbf{id}: Identificador numérico único del tweet.
+    \item \textbf{keyword}: Palabra clave asignada al tweet (puede ser nula).
+    \item \textbf{location}: Ubicación geográfica declarada por el usuario (texto libre con alta tasa de nulos).
+    \item \textbf{text}: Contenido textual original del mensaje.
+    \item \textbf{target}: Variable binaria objetivo ($1 =$ desastre real, $0 =$ no desastre).
 \end{itemize}
 
-\subsection{Distribución de Clases y Valores Faltantes}
-La Figura~\ref{fig:target_missing} ilustra la distribución de la variable objetivo y el porcentaje de valores nulos en cada variable. De los 7,613 tweets de entrenamiento, 4,342 (57.0\%) corresponden a mensajes que no describen desastres, mientras que 3,271 (43.0\%) corresponden a emergencias reales. Se observa un ligero desbalance, pero la proporción es adecuada para entrenamiento sin requerir técnicas severas de submuestreo o sobremuestreo.
+\subsection{Distribución de Clases y Datos Faltantes}
+La Figura~\ref{fig:target_missing} muestra la distribución del target y el porcentaje de valores faltantes por columna. De los 7,613 tweets de entrenamiento, 4,342 (57.0\%) corresponden a la clase $0$ (no desastre) y 3,271 (43.0\%) a la clase $1$ (desastre real). La proporción es balanceada y no requiere submuestreo artificial.
 
 \begin{figure}[H]
     \centering
@@ -73,45 +74,45 @@ La Figura~\ref{fig:target_missing} ilustra la distribución de la variable objet
     \begin{subfigure}[b]{0.48\textwidth}
         \centering
         \includegraphics[width=\textwidth]{figures/missing_values.png}
-        \caption{Porcentaje de valores faltantes por atributo.}
+        \caption{Porcentaje de valores faltantes por columna.}
         \label{fig:missing_vals}
     \end{subfigure}
-    \caption{Distribución de clases y valores faltantes en el conjunto de entrenamiento.}
+    \caption{Distribución de clases y valores nulos en el conjunto de entrenamiento.}
     \label{fig:target_missing}
 \end{figure}
 
-Respecto a los valores nulos, la variable \texttt{location} presenta 2,533 valores faltantes (33.3\%), mientras que \texttt{keyword} contiene 61 nulos (0.8\%). La variable textual principal \texttt{text} y la variable objetivo \texttt{target} no contienen valores nulos.
+En cuanto a los valores faltantes, \texttt{location} presenta 2,533 nulos (33.27\%), mientras que \texttt{keyword} contiene 61 nulos (0.80\%). Las columnas \texttt{text} y \texttt{target} están 100\% completas.
 
-\subsection{Análisis de Palabras Clave (Keywords) y Longitud de Texto}
-El análisis de las palabras clave revela disparidades significativas entre clases. En la Figura~\ref{fig:top_keywords} se aprecian las palabras clave más frecuentes para cada clase. En tweets de desastres reales predominan términos técnicos y operacionales como \textit{derailment}, \textit{wreckage}, \textit{outbreak} y \textit{typhoon}. En contraste, en tweets de no desastre aparecen términos con connotación coloquial o figurativa como \textit{body\%20bags}, \textit{harm}, \textit{armageddon} y \textit{deluge}.
+\subsection{Análisis de Palabras Clave y Longitud de Texto}
+El análisis de las palabras clave más frecuentes revela contrastes notorios entre clases. Como se aprecia en la Figura~\ref{fig:top_keywords}, en desastres reales predominan términos de riesgo físico objetivo (\textit{derailment}, \textit{wreckage}, \textit{outbreak}, \textit{typhoon}), mientras que en no desastres aparecen términos empleados de forma coloquial (\textit{body bags}, \textit{harm}, \textit{armageddon}, \textit{deluge}).
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{figures/top_keywords.png}
+    \includegraphics[width=0.88\textwidth]{figures/top_keywords.png}
     \caption{Top 10 palabras clave (\textit{keywords}) en tweets de desastres vs no desastres.}
     \label{fig:top_keywords}
 \end{figure}
 
-Asimismo, en la Figura~\ref{fig:text_length} se observa que los tweets de desastres reales tienden a poseer una mayor longitud promedio en caracteres y palabras en comparación con los tweets no relacionados a emergencias, lo cual sugiere un estilo de redacción más formal e informativo en reportes de noticias y advertencias oficiales.
+Asimismo, en la Figura~\ref{fig:text_length} se observa que los tweets de desastres reales tienden a poseer una mayor longitud en caracteres y palabras en comparación con los tweets no desastre, reflejando una redacción de tipo noticioso y descriptivo.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.9\textwidth]{figures/text_length_distribution.png}
-    \caption{Distribución de la cantidad de caracteres y palabras por tweet según categoría.}
+    \includegraphics[width=0.88\textwidth]{figures/text_length_distribution.png}
+    \caption{Distribución de la cantidad de caracteres y palabras según categoría.}
     \label{fig:text_length}
 \end{figure}
 
 \section{Limpieza y Preprocesamiento de los Datos}
-El lenguaje utilizado en Twitter se caracteriza por ruido sintáctico, presencia de hipervínculos, menciones de usuarios, abreviaciones y caracteres tipográficos no estándar. Para acondicionar el corpus textual se diseñó e implementó un pipeline secuencial de normalización mediante las librerías \texttt{re}, \texttt{string} y \texttt{NLTK} (\textit{Natural Language Toolkit}):
+El texto de Twitter presenta alta presencia de URLs, menciones de usuarios, signos tipográficos especiales, hashtags y contracciones. Se implementó un pipeline modular y reproducible mediante las librerías \texttt{re}, \texttt{string} y \texttt{NLTK}:
 
 \begin{enumerate}
-    \item \textbf{Conversión a minúsculas:} Homogeneización del espacio léxico para evitar duplicación de términos por distinción de mayúsculas.
-    \item \textbf{Eliminación de hipervínculos (URLs) y entidades HTML:} Expresiones regulares para remover enlaces (\texttt{https?://\textbackslash S+|www\textbackslash .\textbackslash S+}) y secuencias escapadas (\texttt{\&amp;}, \texttt{\&lt;}, \texttt{\&gt;}).
-    \item \textbf{Manejo de menciones (@) y hashtags (\#):} Las menciones de usuario (\texttt{@usuario}) se eliminan ya que corresponden a nombres propios específicos sin carga semántica generalizable. Por el contrario, los hashtags se descomponen para conservar el término interior (ejemplo: \texttt{\#earthquake} $\rightarrow$ \texttt{earthquake}), dado que frecuentemente sintetizan el evento.
-    \item \textbf{Tratamiento diferenciado de números y código 911:} La mayoría de los números enteros corresponden a horas, coordenadas o cantidades irrelevantes. No obstante, el número \textbf{911} posee un significado crítico en situaciones de auxilio. Por ende, se implementó una regla que preserva explícitamente \texttt{911} (transformándolo en el token sintáctico \texttt{emergency911}) antes de suprimir el resto de los dígitos.
-    \item \textbf{Supresión de signos de puntuación y emoticones:} Se eliminan caracteres de puntuación y se remueven símbolos no ASCII / emoticones que no aportan a la semántica formal de clasificación.
-    \item \textbf{Filtrado de palabras vacías (\textit{Stopwords}):} Se empleó el corpus de \textit{stopwords} en inglés de NLTK, complementado con términos comunes de ruido en Twitter (\textit{u}, \textit{im}, \textit{amp}, \textit{via}, \textit{dont}, \textit{cant}).
-    \item \textbf{Lematización:} Reducción morfológica mediante \texttt{WordNetLemmatizer}, llevando las palabras a su raíz léxica (por ejemplo, \textit{buildings} $\rightarrow$ \textit{building}, \textit{fires} $\rightarrow$ \textit{fire}).
+    \item \textbf{Conversión a minúsculas:} Homogeneización del espacio léxico.
+    \item \textbf{Eliminación de URLs y entidades HTML:} Remoción de enlaces (\texttt{https?://\textbackslash S+|www\textbackslash .\textbackslash S+}) y secuencias como \texttt{\&amp;}, \texttt{\&lt;}, \texttt{\&gt;}.
+    \item \textbf{Manejo de menciones (@) y hashtags (\#):} Las menciones (\texttt{@usuario}) se descartan al ser identificadores individuales sin carga semántica generalizable. Por el contrario, los hashtags se procesan para conservar la palabra subyacente (\texttt{\#earthquake} $\rightarrow$ \texttt{earthquake}).
+    \item \textbf{Tratamiento diferenciado de números y código 911:} La mayoría de los dígitos representan horas o métricas ruidosas; no obstante, el número \textbf{911} es el código universal de emergencia. Se implementó una regla que preserva \texttt{911} convirtiéndolo en el token sintáctico \texttt{emergency911} antes de suprimir el resto de los números.
+    \item \textbf{Supresión de signos de puntuación y emoticones:} Se eliminan signos de puntuación y caracteres no ASCII.
+    \item \textbf{Filtrado de palabras vacías (\textit{Stopwords}):} Se utilizó la lista en inglés de NLTK complementada con tokens ruidosos de Twitter (\textit{u}, \textit{im}, \textit{amp}, \textit{via}, \textit{dont}, \textit{cant}, \textit{like}, \textit{get}).
+    \item \textbf{Lematización:} Reducción morfológica con \texttt{WordNetLemmatizer} para unificar formas plurales y conjugaciones a su lema base.
 \end{enumerate}
 
 \begin{table}[H]
@@ -119,7 +120,7 @@ El lenguaje utilizado en Twitter se caracteriza por ruido sintáctico, presencia
 \small
 \caption{Ejemplos de transformación mediante el pipeline de preprocesamiento.}
 \label{tab:preprocessing_examples}
-\begin{tabular}{p{7.5cm}p{7.5cm}c}
+\begin{tabular}{p{7.2cm}p{7.2cm}c}
 \toprule
 \textbf{Texto Original (Raw)} & \textbf{Texto Preprocesado (Cleaned)} & \textbf{Target} \\
 \midrule
@@ -132,10 +133,10 @@ Love this cross body bag so much! & love cross body bag much & 0 \\
 \end{tabular}
 \end{table}
 
-\section{Generación de N-gramas y Análisis de Frecuencias}
+\section{Generación de N-gramas, Frecuencias y Probabilidades}
 
-\subsection{Visualización mediante Nubes de Palabras (Word Clouds)}
-Para visualizar la prominencia relativa de los términos en cada subconjunto, se generaron nubes de palabras utilizando la librería \texttt{wordcloud}, como se presenta en la Figura~\ref{fig:wordclouds}.
+\subsection{Visualización con Nubes de Palabras (Word Clouds)}
+La Figura~\ref{fig:wordclouds} presenta las nubes de palabras generadas con \texttt{wordcloud} para ambas clases. En desastres reales dominan términos como \textit{fire}, \textit{news}, \textit{california}, \textit{suicide}, \textit{police}, \textit{storm} y \textit{killed}. En no desastres destacan \textit{new}, \textit{body}, \textit{love}, \textit{video}, \textit{day} y \textit{time}.
 
 \begin{figure}[H]
     \centering
@@ -152,12 +153,44 @@ Para visualizar la prominencia relativa de los términos en cada subconjunto, se
         \caption{Tweets No Desastres ($target = 0$).}
         \label{fig:wc_nondisaster}
     \end{subfigure}
-    \caption{Nubes de palabras para ambas categorías.}
+    \caption{Nubes de palabras para desastres reales vs no desastres.}
     \label{fig:wordclouds}
 \end{figure}
 
-\subsection{Unigramas y Bigramas más Frecuentes}
-En la Figura~\ref{fig:ngrams_comparison} se observan los unigramas y bigramas dominantes en cada categoría.
+\subsection{Frecuencias y Probabilidades de N-gramas}
+Se calcularon las frecuencias absolutas y probabilidades empíricas $P(w) = \frac{\text{count}(w)}{\sum \text{count}}$ para unigramas, bigramas y trigramas. La Tabla~\ref{tab:ngram_probs} resume los n-gramas más representativos.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Top N-gramas con frecuencias y probabilidades empíricas por categoría.}
+\label{tab:ngram_probs}
+\begin{tabular}{llcc}
+\toprule
+\textbf{Tipo} & \textbf{N-grama} & \textbf{Frecuencia} & \textbf{Probabilidad ($P$)} \\
+\midrule
+\multicolumn{4}{l}{\textit{Desastres Reales ($target = 1$):}} \\
+Unigrama & fire & 267 & 0.00929 \\
+Unigrama & news & 141 & 0.00490 \\
+Unigrama & disaster & 122 & 0.00424 \\
+Bigrama & suicide bomber & 60 & 0.00235 \\
+Bigrama & northern california & 41 & 0.00161 \\
+Bigrama & oil spill & 38 & 0.00149 \\
+Trigrama & suicide bomber detonated & 30 & 0.00130 \\
+Trigrama & northern california wildfire & 29 & 0.00125 \\
+\midrule
+\multicolumn{4}{l}{\textit{No Desastres ($target = 0$):}} \\
+Unigrama & new & 170 & 0.00507 \\
+Unigrama & body & 119 & 0.00355 \\
+Unigrama & video & 102 & 0.00304 \\
+Bigrama & body bag & 49 & 0.00161 \\
+Bigrama & cross body & 39 & 0.00128 \\
+Bigrama & liked video & 34 & 0.00112 \\
+Trigrama & cross body bag & 24 & 0.00088 \\
+Trigrama & reddit quarantine offensive & 19 & 0.00069 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \begin{figure}[H]
     \centering
@@ -174,46 +207,44 @@ En la Figura~\ref{fig:ngrams_comparison} se observan los unigramas y bigramas do
         \caption{Top 15 Bigramas.}
         \label{fig:top_bigrams}
     \end{subfigure}
-    \caption{Comparación de Unigramas y Bigramas más frecuentes por clase.}
+    \caption{Comparación de Unigramas y Bigramas más frecuentes por categoría.}
     \label{fig:ngrams_comparison}
 \end{figure}
 
-\subsection{Discusión sobre Vocabulario Compartido y la Necesidad de Contexto}
-El análisis comparativo de n-gramas revela elementos críticos para el modelado:
+\subsection{Vocabulario Compartido y la Necesidad Imperativa del Contexto}
+El análisis comparativo responde de forma directa a las preguntas 4 y 5 del laboratorio:
 \begin{itemize}
-    \item \textbf{Términos predictivos de desastre:} Unigramas como \textit{fire}, \textit{california}, \textit{suicide}, \textit{disaster}, \textit{police}, \textit{kill}, \textit{storm} y \textit{flood} presentan una concentración preponderante en la clase de desastre real.
-    \item \textbf{Ambigüedad y polisemia en unigramas:} Ciertas palabras como \textit{fire}, \textit{body}, \textit{building}, \textit{bomb} y \textit{kill} aparecen con alta frecuencia en ambas clases. Por ejemplo, \textit{"fire"} aparece 267 veces en desastres y 88 veces en no desastres (usado como jerga juvenil: \textit{"this mixtape is fire"}).
-    \item \textbf{El rol esencial de los Bigramas y Trigramas:} Al incorporar bigramas, la ambigüedad se disipa drásticamente. Mientras que en desastres observamos colocaciones unívocas como \textit{suicide bomber}, \textit{california wildfire}, \textit{severe thunderstorm} y \textit{oil spill}, en la categoría no desastre encontramos combinaciones como \textit{cross body}, \textit{body bag} (asociado a carteras/moda), \textit{liked video} y \textit{reddit quarantine}. Esto demuestra concluyentemente que los modelos de clasificación deben alimentarse con representaciones que capturen n-gramas ($n \ge 2$) o ponderaciones TF-IDF que integren el contexto inmediato.
+    \item \textbf{¿Qué palabras sirven mejor para clasificación?} Términos unívocos como \textit{derailment}, \textit{wildfire}, \textit{suicide bombing}, \textit{oil spill}, \textit{richter} y \textit{evacuate} son altamente discriminativos para desastres.
+    \item \textbf{Ambigüedad de palabras compartidas:} Términos como \textit{fire}, \textit{body}, \textit{building}, \textit{burn} y \textit{kill} aparecen en ambas categorías. Por ejemplo, \textit{fire} aparece 267 veces en desastres (incendios reales) y 88 veces en no desastres (jerga musical y elogios). De igual forma, \textit{body} aparece en desastres vinculado a víctimas mortales y en no desastres vinculado a moda (\textit{cross body bag}).
+    \item \textbf{¿Vale la pena explorar bigramas y trigramas?} \textbf{Sí, es indispensable.} Los bigramas eliminan la polisemia: \textit{cross body} clasifica unívocamente a no desastre, mientras que \textit{suicide bomber} o \textit{california wildfire} clasifican unívocamente a desastre real.
 \end{itemize}
 
-\section{Modelos Preliminares de Clasificación}
-Para la entrega parcial se implementó y evaluó una suite de modelos de clasificación baseline sobre el corpus preprocesado.
+\section{Modelos de Clasificación y Abordaje del Contexto}
 
-\subsection{Estrategia de Vectorización y Abordaje del Contexto}
-Para capturar la información sintáctica y el contexto local de las palabras, se utilizó la técnica de ponderación \textbf{TF-IDF} (\textit{Term Frequency - Inverse Document Frequency}) configurada con:
+\subsection{Estrategia de Vectorización TF-IDF}
+Para capturar el contexto local se utilizó \textbf{TF-IDF} (\textit{Term Frequency - Inverse Document Frequency}) con:
 \begin{itemize}
-    \item Rango de n-gramas: $(1, 2)$, integrando tanto unigramas como bigramas.
-    \item Escalamiento logarítmico sublineal: \texttt{sublinear\_tf = True}, que calcula $1 + \log(TF)$, amortiguando el impacto de palabras repetidas múltiples veces en un mismo tweet.
-    \item Tamaño máximo de vocabulario: $10,000$ características principales seleccionadas por frecuencia inversa de documento.
+    \item Rango de n-gramas: $(1, 2)$ para integrar simultáneamente unigramas y bigramas.
+    \item Escalamiento sublineal: \texttt{sublinear\_tf = True} ($1 + \log(TF)$) para amortiguar palabras repetitivas.
+    \item Vocabulario: 10,000 características de mayor relevancia IDF.
+    \item Partición estratificada: 80\% entrenamiento (6,090 tweets) y 20\% validación (1,523 tweets).
 \end{itemize}
 
-\subsection{Algoritmos Evaluados}
-Se evaluaron cuatro algoritmos fundamentales con división estratificada de datos ($80\%$ para entrenamiento y $20\%$ para validación, preservando la proporción original de clases):
+\subsection{Modelos Evaluados}
+Se evaluaron cuatro clasificadores baseline de diversa naturaleza estadística:
 \begin{enumerate}
-    \item \textbf{Multinomial Naive Bayes (\texttt{MultinomialNB}):} Modelo probabilístico basado en el teorema de Bayes con supuesto de independencia condicional.
-    \item \textbf{Complement Naive Bayes (\texttt{ComplementNB}):} Modificación adaptada para mitigar el sesgo hacia la clase mayoritaria.
-    \item \textbf{Regresión Logística (\texttt{LogisticRegression}):} Modelo lineal con regularización $L_2$ ($C=1.0$), optimizado para estimar probabilidades calibradas.
-    \item \textbf{Linear SVM (\texttt{SGDClassifier}):} Clasificador de margen lineal entrenado mediante descenso de gradiente estocástico con función de pérdida logística.
+    \item \textbf{Multinomial Naive Bayes (\texttt{MultinomialNB}):} Modelo probabilístico basado en frecuencias relativas bajo independencia condicional.
+    \item \textbf{Complement Naive Bayes (\texttt{ComplementNB}):} Variante optimizada para datasets con ligero desbalance de clases.
+    \item \textbf{Regresión Logística (\texttt{LogisticRegression}):} Clasificador lineal con regularización $L_2$ ($C=1.0$), generador de probabilidades continuas calibradas.
+    \item \textbf{Linear SVM (\texttt{SGDClassifier}):} Clasificador lineal de margen máximo optimizado con pérdida logística.
 \end{enumerate}
 
-\section{Resultados y Evaluación Comparativa}
-
-\subsection{Métricas de Rendimiento}
-La Tabla~\ref{tab:model_metrics} resume las métricas cuantitativas obtenidas por cada modelo sobre el conjunto de validación independiente (1,523 tweets).
+\section{Resultados y Selección del Mejor Modelo}
+La Tabla~\ref{tab:model_metrics} resume las métricas cuantitativas evaluadas sobre el conjunto de validación.
 
 \begin{table}[H]
 \centering
-\caption{Métricas de rendimiento de los modelos preliminares de clasificación.}
+\caption{Métricas de rendimiento de los modelos en validación estratificada.}
 \label{tab:model_metrics}
 \begin{tabular}{lccccc}
 \toprule
@@ -221,7 +252,7 @@ La Tabla~\ref{tab:model_metrics} resume las métricas cuantitativas obtenidas po
 \midrule
 Multinomial Naive Bayes & 0.8201 & \textbf{0.8785} & 0.6743 & 0.7630 & 0.8731 \\
 Complement Naive Bayes  & 0.8142 & 0.8193 & 0.7278 & 0.7709 & 0.8731 \\
-Regresión Logística     & \textbf{0.8214} & 0.8435 & 0.7171 & 0.7752 & \textbf{0.8753} \\
+\textbf{Regresión Logística} & \textbf{0.8214} & 0.8435 & 0.7171 & 0.7752 & \textbf{0.8753} \\
 Linear SVM (SGD)        & 0.8201 & 0.8253 & \textbf{0.7370} & \textbf{0.7787} & 0.8747 \\
 \bottomrule
 \end{tabular}
@@ -229,82 +260,234 @@ Linear SVM (SGD)        & 0.8201 & 0.8253 & \textbf{0.7370} & \textbf{0.7787} & 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.88\textwidth]{figures/models_comparison_metrics.png}
-    \caption{Comparación de métricas de rendimiento en validación para los modelos preliminares.}
+    \includegraphics[width=0.85\textwidth]{figures/models_comparison_metrics.png}
+    \caption{Comparación de métricas de rendimiento en validación para los modelos.}
     \label{fig:models_metrics}
 \end{figure}
 
-\subsection{Matrices de Confusión y Curvas ROC}
-En la Figura~\ref{fig:cm_preliminary} se detallan las matrices de confusión de los cuatro modelos, y en la Figura~\ref{fig:roc_preliminary} se exhiben las curvas ROC correspondientes.
-
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.82\textwidth]{figures/confusion_matrices_preliminary.png}
-    \caption{Matrices de confusión de los modelos preliminares en el conjunto de validación.}
-    \label{fig:cm_preliminary}
+    \begin{subfigure}[b]{0.52\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/confusion_matrices_preliminary.png}
+        \caption{Matrices de confusión.}
+        \label{fig:cm_preliminary}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/roc_curves_preliminary.png}
+        \caption{Curvas ROC.}
+        \label{fig:roc_preliminary}
+    \end{subfigure}
+    \caption{Evaluación diagnóstica mediante matrices de confusión y curvas ROC.}
+    \label{fig:diagnostics}
 \end{figure}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{figures/roc_curves_preliminary.png}
-    \caption{Curvas ROC y valor de área bajo la curva (AUC) para los modelos preliminares.}
-    \label{fig:roc_preliminary}
-\end{figure}
-
-\subsection{Discusión de Resultados Preliminares}
+\subsection{Selección del Modelo Ganador}
+La \textbf{Regresión Logística} fue seleccionada como el mejor modelo para la tarea:
 \begin{itemize}
-    \item \textbf{Regresión Logística:} Demuestra el desempeño global más equilibrado, alcanzando la mayor exactitud ($82.14\%$) y el mayor ROC-AUC ($0.8753$), con una alta precisión ($84.35\%$).
-    \item \textbf{Multinomial Naive Bayes:} Presenta la precisión más elevada ($87.85\%$), lo que implica una tasa mínima de falsos positivos (únicamente 61 tweets no desastre clasificados erróneamente como desastre). No obstante, su recall ($67.43\%$) deja escapar un tercio de las alertas reales.
-    \item \textbf{Linear SVM (SGD):} Obtiene el mayor F1-Score ($0.7787$) y la mejor sensibilidad/recall ($73.70\%$), resultando idóneo si la prioridad operativa consiste en no omitir desastres reales.
+    \item Obtiene la mayor exactitud global ($82.14\%$) y el mayor ROC-AUC ($0.8753$).
+    \item Mantiene un equilibrio superior entre precisión ($84.35\%$) y recall ($71.71\%$), produciendo un F1-Score sólido de $0.7752$.
+    \item Proporciona probabilidades probabilísticamente calibradas mediante la función sigmoide, permitiendo calibrar umbrales de decisión según la criticidad de la aplicación de emergencia.
 \end{itemize}
 
-\section{Función de Clasificación de Tweets}
-Con el fin de dar respuesta al Ejercicio 7 del laboratorio, se implementó una función que permite clasificar tweets nuevos ingresados por un usuario \textbf{sin ningún preprocesamiento previo}.
+\section{Función de Clasificación de Tweets Interactiva}
+En cumplimiento del Ejercicio 7, se diseñó la función \texttt{classify\_tweet(text, model, vectorizer)}, la cual clasifica nuevos tweets ingresados por el usuario \textbf{sin necesidad de preprocesamiento manual}.
 
-\subsection{Selección del Modelo Final}
-De los cuatro modelos preliminares comparados en la Sección~6, se seleccionó la \textbf{Regresión Logística} como modelo final: obtuvo el mayor ROC-AUC ($0.8753$) de los cuatro algoritmos evaluados, junto con un F1-Score competitivo ($0.7752$), y produce probabilidades bien calibradas mediante \texttt{predict\_proba}, lo cual resulta útil para reportar el nivel de confianza de cada predicción. Con el objetivo de aprovechar la totalidad de la información disponible antes de exponer el modelo como herramienta de uso general, tanto el vectorizador TF-IDF como el clasificador se reentrenaron utilizando el $100\%$ del conjunto de entrenamiento limpio (en la comparación preliminar de la Sección~6 solo se empleó el $80\%$, reservando el resto para validación).
-
-\subsection{Diseño de la Función}
-La función \texttt{classify\_tweet(text, model, vectorizer)} recibe como único parámetro obligatorio el texto crudo del tweet y ejecuta internamente el mismo pipeline de limpieza (\texttt{clean\_text}) utilizado durante el entrenamiento, de modo que el usuario final no necesita preprocesar el texto manualmente. La función retorna la etiqueta predicha (\textit{Desastre real} / \textit{No es un desastre}) junto con la probabilidad estimada de que el tweet corresponda a un desastre real. El modelo y el vectorizador finales se serializaron con \texttt{joblib} en \texttt{models/best\_model\_logreg.joblib} y \texttt{models/tfidf\_vectorizer.joblib}, permitiendo su reutilización sin necesidad de reentrenar.
-
-\subsection{Pruebas de la Función}
-La Tabla~\ref{tab:classify_examples} presenta los resultados obtenidos al evaluar la función sobre un conjunto de tweets de prueba, incluyendo casos ambiguos que combinan el uso literal y metafórico de la palabra \textit{fire}.
+El modelo final de Regresión Logística y el vectorizador TF-IDF fueron reentrenados sobre el 100\% del conjunto de entrenamiento limpio y serializados con \texttt{joblib} en \texttt{models/best\_model\_logreg.joblib} y \texttt{models/tfidf\_vectorizer.joblib}. La Tabla~\ref{tab:classify_examples} muestra la evaluación de la función sobre tweets de prueba representativos.
 
 \begin{table}[H]
 \centering
+\small
 \caption{Resultados de la función de clasificación sobre tweets nuevos sin preprocesar.}
 \label{tab:classify_examples}
-\begin{tabular}{lp{7.2cm}cc}
+\begin{tabular}{lp{7.5cm}cc}
 \toprule
-\textbf{\#} & \textbf{Tweet} & \textbf{Predicción} & \textbf{Prob. desastre} \\
+\textbf{\#} & \textbf{Tweet} & \textbf{Predicción} & \textbf{Prob. Desastre} \\
 \midrule
-1 & Forest fire near La Ronge Sask. Canada & Desastre real & 0.9186 \\
-2 & This new album is fire, I can't stop listening to it! & No es un desastre & 0.2667 \\
-3 & BREAKING: Massive earthquake hits downtown, buildings collapsing \#emergency & Desastre real & 0.8762 \\
-4 & I'm drowning in homework this week lol & No es un desastre & 0.1351 \\
-5 & Call 911 immediately, there's been an explosion at the factory & Desastre real & 0.6547 \\
-6 & Just had the best burger of my life at this new restaurant downtown & No es un desastre & 0.2055 \\
+1 & Forest fire near La Ronge Sask. Canada & Desastre real & 0.9178 \\
+2 & This new album is fire, I can't stop listening to it! & No es un desastre & 0.2641 \\
+3 & BREAKING: Massive earthquake hits downtown, buildings collapsing \#emergency & Desastre real & 0.8776 \\
+4 & I'm drowning in homework this week lol & No es un desastre & 0.1354 \\
+5 & Call 911 immediately, there's been an explosion at the factory & Desastre real & 0.6573 \\
+6 & Just had the best burger of my life at this new restaurant downtown & No es un desastre & 0.2063 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Los resultados confirman que la función distingue correctamente el uso literal de \textit{fire} (tweet 1) del uso metafórico (tweet 2), y que preservar el token \texttt{emergency911} durante el preprocesamiento (Sección~3) contribuye a que el tweet 5 sea clasificado como desastre real con probabilidad considerable, validando esa decisión de diseño.
-
-\section{Conclusiones de la Entrega Parcial y Trabajo Futuro}
+\section{Análisis de Sentimiento y Clasificación de Polaridad}
+En el Ejercicio 8 se analizó la polaridad del texto mediante dos metodologías:
 \begin{enumerate}
-    \item El análisis exploratorio inicial permitió identificar la estructura del dataset, confirmando que no existen valores faltantes en la variable objetivo ni en el texto principal, y revelando diferencias estadísticas en la longitud de caracteres y vocabulario clave entre desastres reales y metáforas.
-    \item El pipeline de preprocesamiento logró normalizar de forma limpia el texto de redes sociales, eliminando URLs, menciones y puntuación, mientras que la regla ad-hoc para preservar el código de emergencia \texttt{911} protegió un token crítico para la predicción.
-    \item El estudio de n-gramas evidenció que los unigramas por sí solos presentan ambigüedad severa ante términos polisémicos (\textit{fire}, \textit{body}, \textit{building}), mientras que los bigramas proporcionan el contexto discriminativo indispensable.
-    \item Los modelos preliminares basados en TF-IDF lograron superar el $82\%$ de exactitud y $0.875$ de ROC-AUC en validación estratificada, estableciendo una línea base sólida.
-    \item Se desarrolló y validó la función de clasificación de tweets (Sección~7), la cual recibe un tweet crudo y retorna si se refiere a un desastre real, utilizando el modelo de Regresión Logística reentrenado con el $100\%$ de los datos de entrenamiento.
-    \item \textbf{Pasos pendientes para la entrega final:} Incorporación de análisis de polaridad y sentimiento (TextBlob / VADER / SentiWordNet) para clasificar cada tweet como positivo, negativo o neutro; creación de la variable de "negatividad" del tweet y reentrenamiento del modelo incluyéndola como característica adicional; respuesta a las preguntas sobre los tweets más positivos/negativos y su relación con la categoría de desastre real; y ajuste de hiperparámetros (\textit{GridSearchCV}) para la selección final del mejor modelo.
+    \item \textbf{Léxico de opinión de Hu y Liu:} Conteo explícito de palabras positivas ($n_{pos}$) y negativas ($n_{neg}$) del corpus léxico. Un tweet se clasifica en positivo si $n_{pos} > n_{neg}$, negativo si $n_{neg} > n_{pos}$, y neutro si $n_{pos} = n_{neg}$.
+    \item \textbf{Analizador VADER (\textit{Valence Aware Dictionary and sEntiment Reasoner}):} Evaluación de intensidad compuesta (\textit{compound score} $\in [-1, 1]$), clasificando como negativo ($compound < -0.05$), neutro ($-0.05 \le compound \le 0.05$) y positivo ($compound > 0.05$).
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\textwidth]{figures/sentiment_distribution.png}
+    \caption{Distribución porcentual del sentimiento clasificado por categoría de tweet.}
+    \label{fig:sentiment_dist}
+\end{figure}
+
+\subsection{¿Valdrá la pena dejar los emoticones y analizarlos?}
+Para responder cuantitativamente a la pregunta del Ejercicio 8, se realizó un experimento evaluando el impacto de conservar vs eliminar emoticones y emojis sobre los puntajes de sentimiento en todo el dataset de 7,613 tweets:
+
+\begin{table}[H]
+\centering
+\small
+\caption{Impacto cuantitativo de la presencia de emoticones sobre el puntaje VADER.}
+\label{tab:emoticon_impact}
+\begin{tabular}{lc}
+\toprule
+\textbf{Métrica de Evaluación} & \textbf{Valor} \\
+\midrule
+Total de tweets en el corpus & 7,613 \\
+Tweets que contienen emoticones o emojis & 69 (0.91\%) \\
+Tweets cuyo puntaje compuesto de sentimiento fue alterado & 64 (0.84\%) \\
+Diferencia media absoluta en el puntaje de todo el corpus & 0.0030 \\
+Diferencia media absoluta en los tweets que sí tenían emoticon & 0.3625 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Conclusión sobre emoticones:} Menos del 1\% de los tweets del dataset contienen emoticones, debido a que los tweets formales sobre emergencias y reportes climáticos casi nunca utilizan caritas o emojis. No obstante, en el subconjunto de tweets que sí los contienen, la diferencia de polaridad es sustancial ($\Delta = 0.3625$). Para tareas de análisis de sentimiento general en redes sociales es recomendable conservarlos y mapearlos a texto (ejemplo: \texttt{:-)} $\rightarrow$ \texttt{smile}), pero para la tarea específica de clasificar desastres reales, su exclusión en el pipeline principal simplifica el espacio vectorial sin degradar el rendimiento predictivo.
+
+\section{Hallazgos de Sentimiento y Preguntas de Investigación}
+
+\subsection{Los 10 Tweets Más Negativos (Pregunta 9.1)}
+La Tabla~\ref{tab:top10_neg} lista los 10 tweets con el puntaje VADER más negativo. Se observa que \textbf{8 de los 10 tweets (80\%)} corresponden a desastres reales ($target = 1$), vinculados a ataques suicidas, asesinatos, bombardeos y emergencias graves.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{Los 10 tweets más negativos del conjunto de datos.}
+\label{tab:top10_neg}
+\begin{tabularx}{\textwidth}{lp{9.8cm}cc}
+\toprule
+\textbf{ID} & \textbf{Texto del Tweet} & \textbf{Categoría} & \textbf{Compound} \\
+\midrule
+10689 & wreck? wreck wreck wreck wreck wreck wreck wreck wreck wreck wreck wreck wreck? & No desastre & -0.9883 \\
+9172 & @Abu\_Baraa1 Suicide bomber targets Saudi mosque at least 13 dead... This is ridiculous & Desastre real & -0.9686 \\
+9166 & Suicide bomber kills 15 in Saudi security site mosque - A suicide bomber killed at least 15... & Desastre real & -0.9623 \\
+9137 & 19th Day Since 17-Jul-2015 -- Nigeria: Suicide Bomb Attacks Killed 64 People; Blamed: Boko Haram & Desastre real & -0.9595 \\
+9159 & 17 killed in S Arabia mosque suicide bombing... suicide bomber attacked a mosque & Desastre real & -0.9552 \\
+4213 & at the lake *sees a dead fish* me: poor little guy i wonder what happened idk maybe it drowned & No desastre & -0.9549 \\
+682 & illegal alien released by Obama/DHS 4 times Charged With Rape \& Murder of Santa Maria CA & Desastre real & -0.9538 \\
+2225 & Bomb Crash Loot Riot Emergency Pipe Bomb Nuclear Chemical Spill Gas Ricin Leak Violence & Desastre real & -0.9524 \\
+9765 & Bomb head? Explosive decisions dat produced more dead children than dead bodies trapped & Desastre real & -0.9500 \\
+9940 & @cspan \#Prez. Mr. President you are the biggest terrorist and trouble maker in the world & Desastre real & -0.9493 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Los 10 Tweets Más Positivos (Pregunta 9.2)}
+La Tabla~\ref{tab:top10_pos} lista los 10 tweets con el puntaje más positivo. En marcado contraste, \textbf{8 de los 10 tweets (80\%)} pertenecen a la categoría de no desastre ($target = 0$), conteniendo expresiones de entusiasmo, conciertos, humor o elogios.
+
+\begin{table}[H]
+\centering
+\scriptsize
+\caption{Los 10 tweets más positivos del conjunto de datos.}
+\label{tab:top10_pos}
+\begin{tabularx}{\textwidth}{lp{9.8cm}cc}
+\toprule
+\textbf{ID} & \textbf{Texto del Tweet} & \textbf{Categoría} & \textbf{Compound} \\
+\midrule
+10028 & Check out 'Want Twister Tickets AND A VIP EXPERIENCE To See SHANIA? I would Love Love Love! & No desastre & 0.9730 \\
+9345 & @thoutaylorbrown I feel like accidents are just drawn to you but I'm happy you've survived... & No desastre & 0.9564 \\
+8989 & Todays storm will pass; let tomorrows light greet you with a kiss. Bask in this loving warmth & Desastre real & 0.9471 \\
+4541 & @batfanuk we enjoyed the show today. Great fun. The emergency non evacuation was interesting. & No desastre & 0.9423 \\
+4844 & @batfanuk we enjoyed the show today. Great fun. The emergency non evacuation was interesting. & No desastre & 0.9423 \\
+9710 & Maaaan I love Love Without Tragedy by @rihanna I wish she made the whole song & No desastre & 0.9394 \\
+8994 & Free Ebay Sniping RT? http://t.co/B231Ul1O1K Lumbar Extender Back Stretcher Excellent Condition! & No desastre & 0.9376 \\
+3525 & @Raishimi33 :) well I think that sounds like a fine plan where little derailment is possible :) & Desastre real & 0.9356 \\
+1453 & I'm not a Drake fan but I enjoy seeing him body-bagging people. Great marketing lol. & No desastre & 0.9345 \\
+9386 & @duchovbutt yeah we survived 9 seasons and 2 movies. Let's hope for the good. There's hope & No desastre & 0.9344 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{¿Son los tweets de desastres más negativos? (Pregunta 9.3)}
+Para responder de forma rigurosa, se comparó la negatividad (proporción de léxico negativo de VADER) y el puntaje compuesto entre ambas clases:
+\begin{itemize}
+    \item \textbf{Desastres reales ($target = 1$):} Negatividad media $= 0.1736$, mediana $= 0.1570$, compound medio $= -0.2646$.
+    \item \textbf{No desastres ($target = 0$):} Negatividad media $= 0.1323$, mediana $= 0.0880$, compound medio $= -0.0606$.
+\end{itemize}
+
+Dado que las distribuciones no siguen una normal Gaussiana (Figura~\ref{fig:negativity_by_target}), se aplicó la prueba no paramétrica de \textbf{Mann-Whitney U} (de una cola, $H_1: \text{negatividad}_{desastre} > \text{negatividad}_{no\_desastre}$), obteniendo un estadístico $U = 8,141,444.5$ y un $p$-valor de:
+\[
+p = 2.004 \times 10^{-30} \ll 0.001
+\]
+\textbf{Conclusión:} Se rechaza la hipótesis nula con altísima significancia estadística. Los tweets que reportan desastres reales son sistemáticamente y significativamente más negativos que los tweets no relacionados con desastres.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figures/negativity_by_target.png}
+    \caption{Comparación de la negatividad y densidad compound entre desastres reales y no desastres.}
+    \label{fig:negativity_by_target}
+\end{figure}
+
+\section{Incorporación de la Variable de Negatividad y Reentrenamiento}
+En cumplimiento del Ejercicio 10, se incorporó la variable continua de negatividad (\texttt{negatividad} $\in [0, 1]$) como una característica adicional concatenada a la matriz TF-IDF ($X_{full} = [X_{tfidf} \mid x_{neg}]$). Se reentrenaron los cuatro modelos bajo exactamente la misma partición estratificada.
+
+La Tabla~\ref{tab:negativity_comparison} y la Figura~\ref{fig:negativity_comp} comparan el desempeño con y sin la variable de negatividad.
+
+\begin{table}[H]
+\centering
+\small
+\caption{Comparación de modelos con y sin la variable de negatividad.}
+\label{tab:negativity_comparison}
+\begin{tabular}{llccccc}
+\toprule
+\textbf{Conjunto} & \textbf{Modelo} & \textbf{Accuracy} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{ROC-AUC} \\
+\midrule
+Sin negatividad & Multinomial NB & 0.8201 & 0.8785 & 0.6743 & 0.7630 & 0.8731 \\
+Sin negatividad & Complement NB  & 0.8142 & 0.8193 & 0.7278 & 0.7709 & 0.8731 \\
+Sin negatividad & \textbf{Regresión Logística} & \textbf{0.8214} & \textbf{0.8435} & 0.7171 & \textbf{0.7752} & \textbf{0.8753} \\
+Sin negatividad & Linear SVM (SGD) & 0.8201 & 0.8253 & 0.7370 & 0.7787 & 0.8747 \\
+\midrule
+Con negatividad & Multinomial NB & 0.8207 & 0.8802 & 0.6743 & 0.7636 & 0.8731 \\
+Con negatividad & Complement NB  & 0.8155 & 0.8199 & 0.7309 & 0.7728 & 0.8731 \\
+Con negatividad & Regresión Logística & 0.8175 & 0.8381 & 0.7125 & 0.7702 & 0.8742 \\
+Con negatividad & Linear SVM (SGD) & 0.8188 & 0.8327 & 0.7232 & 0.7741 & 0.8741 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/negativity_model_comparison.png}
+    \caption{Comparación del F1-Score en los modelos con y sin la variable de negatividad.}
+    \label{fig:negativity_comp}
+\end{figure}
+
+\subsection{¿La inclusión de la variable mejoró los resultados? ¿En qué medida?}
+\begin{itemize}
+    \item \textbf{Impacto Cuantitativo:} La inclusión de la negatividad produjo variaciones marginales: en modelos probabilísticos (Naive Bayes) generó un incremento casi imperceptible ($\Delta F1 \approx +0.0007$ a $+0.0020$), mientras que en modelos lineales con regularización (Regresión Logística y Linear SVM) causó un leve decremento ($\Delta F1 \approx -0.0050$, $\Delta \text{Accuracy} \approx -0.39\%$).
+    \item \textbf{Razón Fundamental de la Ausencia de Mejora:}
+    \begin{enumerate}
+        \item \textbf{Redundancia Léxica:} La matriz TF-IDF con 10,000 características y n-gramas $(1,2)$ ya contiene las palabras de alta carga negativa (\textit{killed}, \textit{suicide}, \textit{bomb}, \textit{dead}, \textit{fatalities}, \textit{destroyed}). Por ende, la variable de negatividad no introduce información ortogonal nueva.
+        \item \textbf{Bajo Poder Predictivo Aislado:} Como variable única, la negatividad sólo alcanza un $ROC\text{-}AUC = 0.5726$ (ligeramente superior al azar), ya que muchos tweets no relacionados con desastres son altamente negativos (insultos, noticias de política, quejas).
+        \item \textbf{Escalamiento y Regularización:} Al concatenar un único valor continuo de negatividad junto a 10,000 coeficientes dispersos con regularización $L_2$, el modelo asigna una penalización que no compensa la dispersión global del vocabulario.
+    \end{enumerate}
+\end{itemize}
+
+\section{Conclusiones Generales}
+\begin{enumerate}
+    \item El análisis exploratorio de datos confirmó que el conjunto de datos de tweets sobre desastres cuenta con un balance natural adecuado (57\% no desastre vs 43\% desastre real) y que la longitud de los mensajes informativos sobre emergencias es estadísticamente mayor que la de los mensajes casuales.
+    \item El preprocesamiento de texto es crucial: la normalización de hashtags y la preservación explícita del código de auxilio \texttt{911} permitieron retener tokens altamente informativos para el clasificador.
+    \item El análisis de n-gramas demostró que las representaciones basadas exclusivamente en unigramas sufren de alta ambigüedad semántica debido al uso figurativo y polisémico de términos como \textit{fire} y \textit{body}. La incorporación de bigramas (\textit{suicide bomber}, \textit{cross body}) aporta el contexto discriminativo necesario.
+    \item Entre los modelos evaluados, la \textbf{Regresión Logística con TF-IDF} demostró ser el mejor clasificador general ($Accuracy = 82.14\%$, $ROC\text{-}AUC = 0.8753$), sirviendo como base para la función interactiva \texttt{classify\_tweet}.
+    \item El análisis de sentimiento confirmó que los tweets de desastres reales son significativamente más negativos que los tweets comunes ($p = 2.004 \times 10^{-30}$). Sin embargo, agregar la variable de negatividad al modelo no mejora su rendimiento predictivo debido a la redundancia de información con las características léxicas de TF-IDF.
 \end{enumerate}
 
 \section*{Referencias}
 \begin{enumerate}
-    \item Jurafsky, D., \& Martin, J. H. (2008). \textit{Speech and Language Processing}. Stanford University.
+    \item Jurafsky, D., \& Martin, J. H. (2008). \textit{Speech and Language Processing} (2nd ed.). Prentice Hall.
     \item Jurafsky, D., \& Martin, J. H. (2014). \textit{N-Grams}. Speech and Language Processing, pp. 2--7.
     \item Feinerer, I., Hornik, K., \& Meyer, D. (2008). \textit{Text Mining Infrastructure in R}. Journal of Statistical Software, 25(5), 1–54.
+    \item Hutto, C., \& Gilbert, E. (2014). \textit{VADER: A Parsimonious Rule-based Model for Sentiment Analysis of Social Media Text}. Eighth International AAAI Conference on Weblogs and Social Media.
+    \item Hu, M., \& Liu, B. (2004). \textit{Mining and summarizing customer reviews}. Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining (KDD-2004).
     \item Bird, S., Klein, E., \& Loper, E. (2009). \textit{Natural Language Processing with Python}. O'Reilly Media.
     \item Kaggle. (2020). \textit{Natural Language Processing with Disaster Tweets}. Kaggle Competition Dataset.
 \end{enumerate}
